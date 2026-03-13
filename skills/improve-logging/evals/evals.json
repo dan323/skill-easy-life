@@ -1,0 +1,139 @@
+{
+  "skill_name": "improve-logging",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review the logging in this project and tell me what to improve",
+      "description": "Python Flask app with examples of all five issue categories: a print() artifact and a sensitive field to remove, a silent error handler, a wrong log level, a vague message, and an f-string log where structured kwargs are the norm.",
+      "setup": "mkdir -p /tmp/eval-log-0/src && cd /tmp/eval-log-0 && git init && cat > src/auth.py << 'EOF'\nimport logging\n\nlogger = logging.getLogger(__name__)\n\ndef login(username, password):\n    print(f\"Login attempt for {username}\")\n    try:\n        user = db.find_user(username)\n        if not user.check_password(password):\n            logger.warning(\"Invalid password for %s\", username)\n            return None\n        logger.info(\"login success\", extra={\"user_id\": user.id, \"password\": password})\n        return user\n    except Exception:\n        pass\nEOF\ncat > src/orders.py << 'EOF'\nimport logging\n\nlogger = logging.getLogger(__name__)\n\ndef place_order(user_id, items):\n    logger.info(\"order.placed\", extra={\"user_id\": user_id, \"item_count\": len(items)})\n    try:\n        result = payment_service.charge(user_id, items)\n        return result\n    except PaymentError as e:\n        logger.error(\"Error\")\n        raise\n\ndef cancel_order(order_id, user_id):\n    logger.info(f\"Order {order_id} cancelled by user {user_id}\")\n    db.delete_order(order_id)\nEOF",
+      "expected_output": "Report with findings across all five categories. Remove section flags the print() in auth.py and the password field in the login success log. Missing section flags the silent except block. Wrong level section flags the warning on invalid password (should be INFO or ERROR depending on interpretation, but not WARNING). Poor message section flags 'Error' in orders.py. Inconsistency section flags the f-string in cancel_order where structured kwargs are the pattern.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "remove-section-present",
+          "text": "Report contains a Remove section (or equivalent heading)"
+        },
+        {
+          "id": "password-field-flagged",
+          "text": "The password field logged in auth.py login success is flagged for removal"
+        },
+        {
+          "id": "print-artifact-flagged",
+          "text": "The print() call in auth.py is flagged for removal or replacement"
+        },
+        {
+          "id": "silent-except-flagged",
+          "text": "The bare except/pass block in auth.py (which swallows exceptions silently) is flagged as a missing log"
+        },
+        {
+          "id": "vague-error-message-flagged",
+          "text": "The logger.error(\"Error\") in orders.py is flagged for poor message quality"
+        },
+        {
+          "id": "fstring-inconsistency-flagged",
+          "text": "The f-string log in cancel_order is flagged as inconsistent with the structured kwargs pattern"
+        },
+        {
+          "id": "remove-ordered-first",
+          "text": "The Remove section appears before the Missing and Poor Message sections in the report"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Improve the logging in this codebase",
+      "description": "Fresh Python project with only 2 log calls that are inconsistent with each other. Skill should propose a pattern and focus on where to add logging rather than fixing existing logs.",
+      "setup": "mkdir -p /tmp/eval-log-1/src && cd /tmp/eval-log-1 && git init && cat > src/api.py << 'EOF'\nimport logging\n\ndef get_user(user_id):\n    logging.info(\"getting user\")\n    user = db.find(user_id)\n    if not user:\n        logging.warning(\"not found\")\n        return None\n    return user\n\ndef create_user(data):\n    user = db.create(data)\n    return user\n\ndef delete_user(user_id):\n    db.delete(user_id)\nEOF\ncat > src/jobs.py << 'EOF'\nimport logging\n\ndef send_welcome_email(user_id):\n    try:\n        email_service.send(user_id, template=\"welcome\")\n    except Exception as e:\n        raise\n\ndef sync_to_crm(user_id):\n    crm.push(user_id)\nEOF",
+      "expected_output": "Report proposes a logging pattern (since only 2 existing calls and they're inconsistent). Recommends adding logs to create_user, delete_user, send_welcome_email error path, and sync_to_crm. Flags the existing 'not found' and 'getting user' messages as too vague.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "pattern-proposed",
+          "text": "Report proposes a logging pattern (mentions 'proposing' or 'no consistent pattern' or similar)"
+        },
+        {
+          "id": "missing-logs-for-state-changes",
+          "text": "create_user or delete_user (state-changing operations with no logs) are flagged as missing log statements"
+        },
+        {
+          "id": "silent-exception-flagged",
+          "text": "The except block in send_welcome_email that re-raises without logging is flagged as missing a log"
+        },
+        {
+          "id": "vague-messages-flagged",
+          "text": "'getting user' or 'not found' are flagged for poor message quality (no context variables included)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Find logging issues in this project",
+      "description": "TypeScript Express app littered with console.log debug artifacts and missing error logs in async handlers. Main focus is removal and missing categories.",
+      "setup": "mkdir -p /tmp/eval-log-2/src && cd /tmp/eval-log-2 && git init && cat > package.json << 'EOF'\n{\"name\": \"api\", \"dependencies\": {\"express\": \"^4\", \"pino\": \"^8\"}}\nEOF\ncat > src/routes/users.ts << 'EOF'\nimport pino from 'pino';\nconst logger = pino();\n\nexport async function getUser(req: any, res: any) {\n  console.log('getUser called', req.params.id);\n  try {\n    const user = await db.find(req.params.id);\n    console.log('user result:', JSON.stringify(user));\n    res.json(user);\n  } catch (err) {\n    res.status(500).json({ error: 'Internal error' });\n  }\n}\n\nexport async function createUser(req: any, res: any) {\n  console.log('createUser', req.body);\n  const user = await db.create(req.body);\n  logger.info({ userId: user.id }, 'User created');\n  res.json(user);\n}\n\nexport async function deleteUser(req: any, res: any) {\n  try {\n    await db.delete(req.params.id);\n    res.status(204).send();\n  } catch (err) {\n    logger.warn({ err }, 'Delete failed');\n    res.status(500).send();\n  }\n}\nEOF",
+      "expected_output": "Removes all console.log calls (3 findings). Flags missing error log in getUser catch block. Flags deleteUser logging a failure as warn instead of error. Possibly flags the JSON.stringify of a full user object as a log-spam / sensitive data risk.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "consolelog-flagged-for-removal",
+          "text": "The console.log calls are flagged for removal (at least 2 of the 3 are called out)"
+        },
+        {
+          "id": "getuser-catch-missing-log",
+          "text": "The catch block in getUser with no log statement is flagged as a missing log"
+        },
+        {
+          "id": "delete-warn-level-wrong",
+          "text": "The logger.warn in deleteUser is flagged — a delete failure should be logged at error level"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Check the logging in this service",
+      "description": "Python service that logs an API key and a user password in plain text. The Remove section must appear first and call these out clearly.",
+      "setup": "mkdir -p /tmp/eval-log-3/src && cd /tmp/eval-log-3 && git init && cat > src/integrations.py << 'EOF'\nimport structlog\n\nlog = structlog.get_logger(__name__)\n\ndef call_payment_api(user_id, amount, api_key):\n    log.info(\"payment.request\", user_id=user_id, amount=amount, api_key=api_key)\n    response = requests.post(PAYMENT_URL, headers={\"Authorization\": api_key})\n    if not response.ok:\n        log.error(\"payment.failed\", status=response.status_code)\n    return response\n\ndef reset_password(user_id, new_password):\n    log.info(\"password.reset\", user_id=user_id, new_password=new_password)\n    db.update_password(user_id, new_password)\nEOF",
+      "expected_output": "Remove section is first and flags api_key and new_password fields as sensitive data that must not appear in logs. Both findings should have a clear explanation of the security risk.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "api-key-flagged",
+          "text": "The api_key field logged in call_payment_api is flagged for removal as sensitive data"
+        },
+        {
+          "id": "password-flagged",
+          "text": "The new_password field logged in reset_password is flagged for removal as sensitive data"
+        },
+        {
+          "id": "security-risk-explained",
+          "text": "The report explains why logging these values is a security risk (not just says to remove them)"
+        },
+        {
+          "id": "remove-is-first-section",
+          "text": "The Remove section (or sensitive data section) appears before any other recommendation category"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Audit the logging in this Go service",
+      "description": "Go service mixing zap and the standard library log package, with inconsistent level usage and a tight loop producing log spam.",
+      "setup": "mkdir -p /tmp/eval-log-4/internal && cd /tmp/eval-log-4 && git init && cat > go.mod << 'EOF'\nmodule example.com/svc\n\ngo 1.21\n\nrequire go.uber.org/zap v1.26.0\nEOF\ncat > internal/processor.go << 'EOF'\npackage processor\n\nimport (\n\t\"log\"\n\t\"go.uber.org/zap\"\n)\n\nvar logger, _ = zap.NewProduction()\n\nfunc ProcessBatch(items []Item) error {\n\tfor _, item := range items {\n\t\tlogger.Info(\"processing item\", zap.String(\"id\", item.ID))\n\t\tif err := process(item); err != nil {\n\t\t\tlogger.Warn(\"item failed\", zap.String(\"id\", item.ID), zap.Error(err))\n\t\t}\n\t}\n\treturn nil\n}\n\nfunc StartWorker() {\n\tlog.Println(\"worker started\")\n\tfor {\n\t\tjob := queue.Pop()\n\t\tif err := handleJob(job); err != nil {\n\t\t\tlog.Printf(\"job failed: %v\", err)\n\t\t}\n\t}\n}\nEOF",
+      "expected_output": "Flags the per-item Info log inside the loop as log spam (should log a summary after the batch instead). Flags item failed at Warn — processing errors should be Error. Flags log.Println and log.Printf in StartWorker as inconsistent with the zap pattern used elsewhere. Recommends replacing stdlib log calls with zap.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "loop-log-spam-flagged",
+          "text": "The logger.Info inside the for loop is flagged as log spam or recommended for removal/replacement with a batch summary"
+        },
+        {
+          "id": "warn-level-wrong",
+          "text": "logger.Warn for a processing error is flagged — item processing failures should be logged at Error level"
+        },
+        {
+          "id": "stdlib-log-inconsistency",
+          "text": "log.Println and log.Printf in StartWorker are flagged as inconsistent with the zap logger used elsewhere"
+        }
+      ]
+    }
+  ]
+}

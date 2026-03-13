@@ -1,0 +1,149 @@
+{
+  "skill_name": "find-dead-code",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Find dead code in this project",
+      "description": "Python project with one clearly unused private function and one used function. Only the unused one should be flagged at High confidence.",
+      "setup": "mkdir -p /tmp/eval-dead-0 && cd /tmp/eval-dead-0 && git init && cat > utils.py << 'EOF'\ndef _format_name(first, last):\n    return f\"{first} {last}\"\n\ndef _normalize_phone(number):\n    \"\"\"Strip non-digit characters from a phone number.\"\"\"\n    return ''.join(c for c in number if c.isdigit())\n\ndef greet(first, last):\n    name = _format_name(first, last)\n    return f\"Hello, {name}!\"\nEOF",
+      "expected_output": "Report flags _normalize_phone as High confidence dead code. _format_name is NOT flagged (it is called by greet). greet is NOT flagged (it is a module-level public function).",
+      "files": [],
+      "assertions": [
+        {
+          "id": "unused-function-flagged",
+          "text": "_normalize_phone is present in the report as a dead code finding"
+        },
+        {
+          "id": "unused-function-high-confidence",
+          "text": "_normalize_phone is reported at High confidence (not Medium or Low)"
+        },
+        {
+          "id": "used-function-not-flagged",
+          "text": "_format_name is NOT listed as dead code (it is called by greet)"
+        },
+        {
+          "id": "report-includes-file-and-line",
+          "text": "The report includes the file name (utils.py) and a line number for the finding"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Find unused code in this codebase",
+      "description": "Python file with two unused imports and one used import. Both unused imports should be flagged; the used one should not.",
+      "setup": "mkdir -p /tmp/eval-dead-1 && cd /tmp/eval-dead-1 && git init && cat > processor.py << 'EOF'\nimport os\nimport json\nfrom datetime import timedelta\n\ndef read_config(path):\n    with open(path) as f:\n        return json.load(f)\nEOF",
+      "expected_output": "Report flags 'os' and 'timedelta' as unused imports (High confidence). 'json' is NOT flagged — it is used in the function body.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "unused-os-flagged",
+          "text": "The 'os' import is listed as a dead code finding"
+        },
+        {
+          "id": "unused-timedelta-flagged",
+          "text": "The 'timedelta' import is listed as a dead code finding"
+        },
+        {
+          "id": "used-json-not-flagged",
+          "text": "'json' is NOT listed as a dead code finding (it is used in read_config)"
+        },
+        {
+          "id": "imports-flagged-high-confidence",
+          "text": "The unused import findings are at High confidence"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Find dead code",
+      "description": "Java Spring Boot project where @Service and @Component classes appear to have no callers in the codebase, but should be excluded from the report as DI-managed. Only a truly unused private helper should be flagged.",
+      "setup": "mkdir -p /tmp/eval-dead-2/src && cd /tmp/eval-dead-2 && git init && cat > src/UserService.java << 'EOF'\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class UserService {\n    public String findById(Long id) {\n        return helper(id);\n    }\n\n    private String helper(Long id) {\n        return \"user-\" + id;\n    }\n\n    private String legacyFormat(Long id) {\n        return \"legacy:\" + id;\n    }\n}\nEOF",
+      "expected_output": "UserService is NOT flagged (it is @Service-managed). legacyFormat is flagged as High confidence dead code (private, no callers). helper is NOT flagged (called by findById). Report notes that Spring DI annotations were detected and lists excluded symbols.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "service-not-flagged",
+          "text": "UserService class is NOT listed as dead code"
+        },
+        {
+          "id": "di-exclusion-noted",
+          "text": "The report mentions that Spring DI annotations were detected and that injection-managed symbols were excluded"
+        },
+        {
+          "id": "unused-private-flagged",
+          "text": "legacyFormat is flagged as a dead code finding"
+        },
+        {
+          "id": "used-private-not-flagged",
+          "text": "helper is NOT flagged (it is called by findById)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find unused code in this project",
+      "description": "Python module that uses getattr for dynamic dispatch. A method whose name appears as a string literal near a getattr call should be downgraded to Low confidence with a reflection warning.",
+      "setup": "mkdir -p /tmp/eval-dead-3 && cd /tmp/eval-dead-3 && git init && cat > dispatcher.py << 'EOF'\nclass Handler:\n    def handle_create(self, payload):\n        return f\"created: {payload}\"\n\n    def handle_delete(self, payload):\n        return f\"deleted: {payload}\"\n\n    def handle_update(self, payload):\n        return f\"updated: {payload}\"\n\ndef dispatch(action, payload):\n    handler = Handler()\n    method = getattr(handler, f\"handle_{action}\")\n    return method(payload)\nEOF",
+      "expected_output": "All three handle_* methods may be called via getattr. They should either not be flagged, or be flagged at Low confidence with an explicit reflection warning. No handle_* method should appear at High confidence.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "reflection-warning-present",
+          "text": "The report includes a warning about getattr or dynamic dispatch being used in the project"
+        },
+        {
+          "id": "handle-methods-not-high-confidence",
+          "text": "None of the handle_create, handle_delete, or handle_update methods are reported at High confidence"
+        },
+        {
+          "id": "reflection-explains-risk",
+          "text": "The report explains that methods may be invoked at runtime via getattr and should be verified before removal"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Find dead code in this project",
+      "description": "Python CLI with a main() entry point and a Click command. Neither should be flagged as dead. An unrelated unused helper function should still be flagged.",
+      "setup": "mkdir -p /tmp/eval-dead-4 && cd /tmp/eval-dead-4 && git init && cat > cli.py << 'EOF'\nimport click\n\n@click.command()\n@click.argument('name')\ndef greet(name):\n    \"\"\"Greet someone by name.\"\"\"\n    click.echo(f\"Hello, {name}!\")\n\ndef _build_greeting(name):\n    return f\"Hi there, {name}\"\n\ndef _unused_helper():\n    pass\n\ndef main():\n    greet()\n\nif __name__ == '__main__':\n    main()\nEOF",
+      "expected_output": "main() is NOT flagged (it is the entry point). greet() is NOT flagged (it is a Click command decorator target). _unused_helper is flagged as High confidence. _build_greeting may or may not be flagged depending on whether the skill can confirm it has no callers.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "main-not-flagged",
+          "text": "main() is NOT listed as a dead code finding"
+        },
+        {
+          "id": "click-command-not-flagged",
+          "text": "greet() is NOT listed as a dead code finding (it is a @click.command target)"
+        },
+        {
+          "id": "unused-helper-flagged",
+          "text": "_unused_helper is flagged as a dead code finding"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Find dead code",
+      "description": "Project where a function is only called from test files. It should not be reported as dead — test helpers are legitimate callers.",
+      "setup": "mkdir -p /tmp/eval-dead-5/tests && cd /tmp/eval-dead-5 && git init && cat > helpers.py << 'EOF'\ndef make_user(name, role='member'):\n    \"\"\"Test factory: create a minimal user dict.\"\"\"\n    return {'name': name, 'role': role}\n\ndef _truly_unused():\n    return 42\nEOF\ncat > tests/test_auth.py << 'EOF'\nfrom helpers import make_user\n\ndef test_admin_role():\n    user = make_user('Alice', role='admin')\n    assert user['role'] == 'admin'\nEOF",
+      "expected_output": "make_user is NOT flagged — it is used in test files and is a legitimate test helper. _truly_unused is flagged as High confidence dead code.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "test-helper-not-flagged",
+          "text": "make_user is NOT listed as a dead code finding (it is called from test_auth.py)"
+        },
+        {
+          "id": "truly-unused-flagged",
+          "text": "_truly_unused is flagged as a dead code finding"
+        },
+        {
+          "id": "truly-unused-high-confidence",
+          "text": "_truly_unused is reported at High confidence"
+        }
+      ]
+    }
+  ]
+}

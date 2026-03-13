@@ -1,0 +1,143 @@
+{
+  "skill_name": "document-project",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Document this project",
+      "description": "Fresh project with a package.json but no README and no docs/. Skill should create a minimal README and at least a getting-started page.",
+      "setup": "mkdir -p /tmp/eval-doc-0 && cd /tmp/eval-doc-0 && git init && echo '{\"name\":\"acme-cli\",\"version\":\"1.0.0\",\"description\":\"A CLI tool for managing deployments\",\"bin\":{\"acme\":\"./bin/acme.js\"},\"scripts\":{\"test\":\"jest\",\"start\":\"node bin/acme.js\"}}' > package.json && mkdir -p bin src && echo '#!/usr/bin/env node\nconsole.log(\"acme\");' > bin/acme.js",
+      "expected_output": "README.md created with a brief description and Quick Start section. docs/getting-started.md created with numbered installation and first-run steps. README links to docs pages.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "readme-created",
+          "text": "README.md was created and is non-empty"
+        },
+        {
+          "id": "readme-has-quick-start",
+          "text": "README.md contains a '## Quick Start' section"
+        },
+        {
+          "id": "readme-links-to-docs",
+          "text": "README.md contains at least one markdown link pointing to a file inside docs/"
+        },
+        {
+          "id": "getting-started-created",
+          "text": "docs/getting-started.md was created"
+        },
+        {
+          "id": "getting-started-has-steps",
+          "text": "docs/getting-started.md contains numbered steps (lines starting with '1.', '2.', etc.)"
+        },
+        {
+          "id": "readme-is-concise",
+          "text": "README.md does not contain a long feature list — the description section is 3 sentences or fewer before the Quick Start heading"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Improve the project documentation",
+      "description": "Project has an existing README with content but no docs/ directory. Skill should preserve existing README content and create a docs/ structure.",
+      "setup": "mkdir -p /tmp/eval-doc-1 && cd /tmp/eval-doc-1 && git init && echo '{\"name\":\"mylib\",\"version\":\"2.3.1\",\"description\":\"A utility library for data transformation\"}' > package.json && printf '# mylib\\n\\nA utility library for data transformation.\\n\\n## Installation\\n\\n```bash\\nnpm install mylib\\n```\\n\\n## Usage\\n\\nImport and call `transform(data)`.\\n' > README.md",
+      "expected_output": "Existing README.md content is preserved. A docs/ directory is created with at least getting-started.md. README is updated to link to the new docs pages. Existing Installation section is not duplicated.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "existing-readme-content-preserved",
+          "text": "README.md still contains the original 'A utility library for data transformation' description"
+        },
+        {
+          "id": "docs-dir-created",
+          "text": "At least one file was created inside a docs/ directory"
+        },
+        {
+          "id": "readme-links-to-docs",
+          "text": "README.md contains at least one markdown link pointing to a docs/ page"
+        },
+        {
+          "id": "no-duplicate-installation",
+          "text": "The word 'Installation' appears only once in README.md (existing section not duplicated)"
+        },
+        {
+          "id": "getting-started-has-breadcrumb",
+          "text": "docs/getting-started.md contains a link back to README.md"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Write documentation for this project",
+      "description": "Minimal project — a single Python script with no complex structure. Skill should choose a minimal doc set and not create placeholder pages.",
+      "setup": "mkdir -p /tmp/eval-doc-2 && cd /tmp/eval-doc-2 && git init && printf '[project]\\nname = \"dedupe\"\\nversion = \"0.1.0\"\\ndescription = \"Remove duplicate lines from a file\"\\n' > pyproject.toml && printf '#!/usr/bin/env python3\\nimport sys\\n\\ndef main():\\n    seen = set()\\n    for line in sys.stdin:\\n        if line not in seen:\\n            print(line, end=\"\")\\n            seen.add(line)\\n\\nif __name__ == \"__main__\":\\n    main()\\n' > dedupe.py",
+      "expected_output": "README.md and minimal docs created (getting-started.md at most). No architecture.md, contributing.md, or deployment.md created for such a simple project. No pages with TBD or placeholder content.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "readme-created",
+          "text": "README.md was created and is non-empty"
+        },
+        {
+          "id": "no-placeholder-pages",
+          "text": "No created file contains 'TBD', 'TODO', or 'Coming soon' as its only body content"
+        },
+        {
+          "id": "no-unnecessary-architecture-page",
+          "text": "docs/architecture.md was NOT created (project is too simple to warrant it)"
+        },
+        {
+          "id": "readme-describes-usage",
+          "text": "README.md or docs/getting-started.md shows how to run the script (e.g. a code block with 'python' or 'dedupe')"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Update the project docs",
+      "description": "README has a badge pointing to a CI workflow file that does not exist. Skill must flag the stale badge but must NOT silently remove it.",
+      "setup": "mkdir -p /tmp/eval-doc-3/.github/workflows && cd /tmp/eval-doc-3 && git init && echo '{\"name\":\"svc\",\"version\":\"1.0.0\"}' > package.json && echo 'name: build\\non: push\\njobs:\\n  build:\\n    runs-on: ubuntu-latest\\n    steps:\\n      - uses: actions/checkout@v3' > .github/workflows/build.yml && printf '# svc\\n\\n[![CI](https://github.com/org/svc/actions/workflows/ci.yml/badge.svg)](https://github.com/org/svc/actions/workflows/ci.yml)\\n\\nA service.\\n' > README.md",
+      "expected_output": "Skill flags that the badge references ci.yml but only build.yml exists. The badge remains in README.md untouched. A warning or note is printed to the user about the mismatch.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "badge-not-removed",
+          "text": "The original badge markdown is still present in README.md (the img.shields.io or actions badge line was not deleted)"
+        },
+        {
+          "id": "stale-badge-flagged",
+          "text": "The skill output or summary mentions that the badge references a workflow file (ci.yml) that does not exist"
+        },
+        {
+          "id": "fix-suggested",
+          "text": "The skill suggests updating the badge to reference build.yml instead of ci.yml"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Add documentation to this project",
+      "description": "Project already has README and docs/ pages, but they lack cross-links between pages. Skill should add missing breadcrumbs and See Also sections without rewriting existing content.",
+      "setup": "mkdir -p /tmp/eval-doc-4/docs && cd /tmp/eval-doc-4 && git init && echo '{\"name\":\"platform\",\"version\":\"3.0.0\",\"description\":\"A deployment platform\"}' > package.json && printf '# platform\\n\\nA deployment platform.\\n\\n## Documentation\\n\\n- [Getting Started](docs/getting-started.md)\\n- [Architecture](docs/architecture.md)\\n' > README.md && printf '# Getting Started\\n\\n1. Install: `npm install -g platform`\\n2. Run: `platform deploy`\\n' > docs/getting-started.md && printf '# Architecture\\n\\nThe platform consists of a CLI, an API server, and a worker queue.\\n' > docs/architecture.md",
+      "expected_output": "docs/getting-started.md and docs/architecture.md are updated to include breadcrumb links back to README and See Also links to related pages. Existing content in both files is preserved.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "existing-content-preserved",
+          "text": "docs/getting-started.md still contains the original numbered install and run steps"
+        },
+        {
+          "id": "breadcrumb-in-getting-started",
+          "text": "docs/getting-started.md contains a link back to ../README.md or README.md"
+        },
+        {
+          "id": "breadcrumb-in-architecture",
+          "text": "docs/architecture.md contains a link back to ../README.md or README.md"
+        },
+        {
+          "id": "cross-link-between-pages",
+          "text": "At least one docs page links to another docs page (e.g. getting-started links to architecture or vice versa)"
+        }
+      ]
+    }
+  ]
+}

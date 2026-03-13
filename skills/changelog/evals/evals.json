@@ -1,0 +1,145 @@
+{
+  "skill_name": "changelog",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Generate a changelog for this project",
+      "expected_output": "A CHANGELOG.md file in Keep a Changelog format with entries grouped by Added/Fixed/Changed categories, covering all commits in the repo",
+      "files": [],
+      "assertions": [
+        {
+          "id": "changelog-created",
+          "text": "CHANGELOG.md file was created and is non-empty"
+        },
+        {
+          "id": "has-added-section",
+          "text": "Output contains a '### Added' section (repo has feat: commits)"
+        },
+        {
+          "id": "has-fixed-section",
+          "text": "Output contains a '### Fixed' section (repo has a fix: commit)"
+        },
+        {
+          "id": "has-changed-section",
+          "text": "Output contains a '### Changed' section (repo has refactor/perf commits)"
+        },
+        {
+          "id": "has-commit-shas",
+          "text": "Entries include 7-character commit SHAs in parentheses, e.g. (abc1234)"
+        },
+        {
+          "id": "keep-a-changelog-header",
+          "text": "File contains a link to keepachangelog.com in the header or footer"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Update my changelog with the latest changes",
+      "expected_output": "The existing CHANGELOG.md is updated with only new commits. Existing entries are preserved without duplication. New entries appear above the old ones.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "original-section-preserved",
+          "text": "The existing [0.1.0] section is still present in the output"
+        },
+        {
+          "id": "no-duplicate-entries",
+          "text": "The phrase 'add users endpoint' appears only once (not duplicated)"
+        },
+        {
+          "id": "new-feat-entry-present",
+          "text": "Output includes an entry for the 'add create user endpoint' commit"
+        },
+        {
+          "id": "new-fix-entry-present",
+          "text": "Output includes an entry for the 'validate user input' fix commit"
+        },
+        {
+          "id": "new-auth-entry-present",
+          "text": "Output includes an entry for the 'authentication middleware' commit"
+        },
+        {
+          "id": "new-entries-above-old",
+          "text": "New entries appear earlier in the file than the existing [0.1.0] section"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a changelog for this project",
+      "expected_output": "A CHANGELOG.md file with entries even for vague commit messages. Entries should be reasonably categorized. The skill should handle low-quality commit messages gracefully.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "changelog-created",
+          "text": "CHANGELOG.md file was created and is non-empty"
+        },
+        {
+          "id": "all-commits-represented",
+          "text": "Output has at least 6 entries (one per commit, excluding any merge commits; repo has 7 commits)"
+        },
+        {
+          "id": "has-category-sections",
+          "text": "Entries are grouped under at least one category heading (### Added, ### Fixed, ### Changed, etc.)"
+        },
+        {
+          "id": "valid-markdown-headings",
+          "text": "File contains markdown headings (lines starting with #)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a changelog for this project",
+      "expected_output": "A CHANGELOG.md with all staged/unstaged changes listed under [Unreleased]. No SHAs since there are no commits. Entries describe what each file adds rather than using raw filenames.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "changelog-created",
+          "text": "CHANGELOG.md file was created and is non-empty"
+        },
+        {
+          "id": "has-unreleased-section",
+          "text": "Output contains an '## [Unreleased]' section"
+        },
+        {
+          "id": "no-shas-present",
+          "text": "No 7-character hex SHAs in parentheses (there are no commits to reference)"
+        },
+        {
+          "id": "has-added-section",
+          "text": "Output contains a '### Added' section (all changes are new files)"
+        },
+        {
+          "id": "keep-a-changelog-header",
+          "text": "File contains a link to keepachangelog.com"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Update my changelog — I have some new commits since the last entry, and also a staged change not yet committed",
+      "expected_output": "New committed changes appear with 7-char SHAs. The staged (uncommitted) change appears under [Unreleased] without a SHA. Existing changelog content is preserved.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "committed-entries-have-shas",
+          "text": "Entries for committed changes include a 7-character SHA in parentheses"
+        },
+        {
+          "id": "unreleased-entry-has-no-sha",
+          "text": "The uncommitted/staged entry appears under [Unreleased] and has no SHA"
+        },
+        {
+          "id": "existing-content-preserved",
+          "text": "Previously existing changelog entries are still present"
+        },
+        {
+          "id": "unreleased-section-at-top",
+          "text": "[Unreleased] section appears before any versioned sections"
+        }
+      ]
+    }
+  ]
+}
