@@ -50,6 +50,7 @@ A `SKILL.md` file contains:
 | `find-dead-code`         | `skills/find-dead-code/SKILL.md`         | Find unused functions, classes, imports across languages                  |
 | `find-breaking-rest-api` | `skills/find-breaking-rest-api/SKILL.md` | Find breaking REST API changes — multi-file routers, shared schemas, auth |
 | `improve-logging`        | `skills/improve-logging/SKILL.md`        | Audit logging quality and produce prioritised fix recommendations         |
+| `brainstorm`             | `skills/brainstorm/SKILL.md`             | Read the project and suggest the 5 most valuable next features or improvements |
 
 ## Adding a New Skill
 

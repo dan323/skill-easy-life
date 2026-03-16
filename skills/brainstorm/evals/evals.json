@@ -1,0 +1,176 @@
+{
+  "skill_name": "brainstorm",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Brainstorm ideas for this project",
+      "description": "Flask REST API with obvious missing features: no auth, no pagination on list endpoints that could return thousands of rows, hardcoded config, missing input validation on POST, and an explicit TODO for a search endpoint. The skill should surface these gaps as specific, actionable ideas grounded in the actual files.",
+      "setup": "mkdir -p /tmp/eval-brainstorm-0 && cd /tmp/eval-brainstorm-0 && git init && cat > app.py << 'EOF'\nfrom flask import Flask, request, jsonify\nfrom models import db, Product\n\napp = Flask(__name__)\napp.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user:password@localhost/proddb'\napp.config['SECRET_KEY'] = 'hardcoded-secret-do-not-ship'\n\n@app.route('/api/products', methods=['GET'])\ndef list_products():\n    # Returns ALL products — no pagination, could be 50k rows\n    products = Product.query.all()\n    return jsonify([p.to_dict() for p in products])\n\n@app.route('/api/products/<int:id>', methods=['GET'])\ndef get_product(id):\n    p = Product.query.get_or_404(id)\n    return jsonify(p.to_dict())\n\n@app.route('/api/products', methods=['POST'])\ndef create_product():\n    # TODO: add input validation\n    data = request.json\n    p = Product(name=data['name'], price=data['price'], stock=data.get('stock', 0))\n    db.session.add(p)\n    db.session.commit()\n    return jsonify(p.to_dict()), 201\n\n@app.route('/api/products/<int:id>', methods=['PUT'])\ndef update_product(id):\n    p = Product.query.get_or_404(id)\n    data = request.json\n    p.name = data.get('name', p.name)\n    p.price = data.get('price', p.price)\n    p.stock = data.get('stock', p.stock)\n    db.session.commit()\n    return jsonify(p.to_dict())\n\n@app.route('/api/products/<int:id>', methods=['DELETE'])\ndef delete_product(id):\n    p = Product.query.get_or_404(id)\n    db.session.delete(p)\n    db.session.commit()\n    return '', 204\n\n# TODO: add search endpoint — clients keep asking for /api/products?q=keyword\n\nif __name__ == '__main__':\n    app.run(debug=True)\nEOF\ncat > models.py << 'EOF'\nfrom flask_sqlalchemy import SQLAlchemy\n\ndb = SQLAlchemy()\n\nclass Product(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    name = db.Column(db.String(200), nullable=False)\n    price = db.Column(db.Float, nullable=False)\n    stock = db.Column(db.Integer, default=0)\n\n    def to_dict(self):\n        return {'id': self.id, 'name': self.name, 'price': self.price, 'stock': self.stock}\nEOF\ncat > requirements.txt << 'EOF'\nflask==3.0.0\nflask-sqlalchemy==3.1.1\npsycopg2-binary==2.9.9\nEOF\ncat > README.md << 'EOF'\n# Product API\n\nA simple REST API for managing product inventory. Built with Flask and PostgreSQL.\n\n## Endpoints\n- GET /api/products — list all products\n- POST /api/products — create a product\n- GET /api/products/:id — get a product\n- PUT /api/products/:id — update a product\n- DELETE /api/products/:id — delete a product\nEOF\ngit add . && git commit -m 'initial product API'",
+      "expected_output": "5 ranked ideas specific to this Flask project. Must surface: (1) pagination on the list endpoint, (2) the search endpoint from the TODO comment, (3) input validation from the TODO on POST, (4) config/secrets management (hardcoded DB URI and SECRET_KEY). Each idea must reference actual file names (app.py, models.py) rather than generic advice. Each idea must have an effort estimate and a specific 'Where to start' step.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "five-ideas-produced",
+          "text": "The report contains exactly 5 numbered ideas"
+        },
+        {
+          "id": "search-todo-surfaced",
+          "text": "The TODO comment about adding a search endpoint (clients asking for /api/products?q=keyword) is identified as one of the ideas"
+        },
+        {
+          "id": "pagination-gap-identified",
+          "text": "The missing pagination on GET /api/products (currently returns all rows with no limit) is identified as a problem"
+        },
+        {
+          "id": "ideas-reference-actual-files",
+          "text": "At least 3 of the 5 ideas reference a specific file from the project (app.py or models.py) in their 'Where to start' section"
+        },
+        {
+          "id": "effort-estimates-present",
+          "text": "Every idea includes an effort estimate (hours, days, or weeks)"
+        },
+        {
+          "id": "at-least-one-business-feature",
+          "text": "At least one idea is a new user-facing feature (not a technical fix) — something like product categories, low-stock alerts, bulk pricing, discount codes, or a similar capability that adds business value to a product inventory API"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "What should I work on next?",
+      "description": "Node.js CLI tool where the --format flag is stubbed with a TODO (only 'text' works, 'json' and 'csv' always fall through to text), there is a FIXME about a crash on empty input, help text is an empty string, and output directory is hardcoded to /tmp. The skill must read the source to find these signals rather than producing generic CLI advice.",
+      "setup": "mkdir -p /tmp/eval-brainstorm-1/src && cd /tmp/eval-brainstorm-1 && git init && cat > package.json << 'EOF'\n{\n  \"name\": \"dep-report\",\n  \"version\": \"0.3.1\",\n  \"description\": \"Scans a Node.js project and generates a dependency report\",\n  \"bin\": { \"dep-report\": \"./src/cli.js\" },\n  \"scripts\": { \"start\": \"node src/cli.js\" },\n  \"dependencies\": {\n    \"commander\": \"^11.0.0\",\n    \"chalk\": \"^5.3.0\"\n  }\n}\nEOF\ncat > src/cli.js << 'EOF'\n#!/usr/bin/env node\nconst { Command } = require('commander');\nconst { analyze } = require('./analyzer');\nconst { formatText } = require('./formatter');\n\nconst program = new Command();\n\nprogram\n  .name('dep-report')\n  .description('') // TODO: write help text\n  .version('0.3.1')\n  .argument('<project-dir>', 'path to the project to scan')\n  .option('--format <type>', 'output format: text, json, csv', 'text')\n  .option('--depth <n>', 'how many levels of transitive deps to include', '1')\n  .action(async (projectDir, opts) => {\n    // FIXME: crashes with \"Cannot read properties of undefined\" when projectDir\n    // has no package.json — need to validate before calling analyze()\n    const result = await analyze(projectDir, { depth: parseInt(opts.depth) });\n\n    // TODO: implement json and csv formats\n    // For now all formats fall through to text\n    if (opts.format === 'json') {\n      console.log('JSON output not yet implemented, falling back to text');\n    } else if (opts.format === 'csv') {\n      console.log('CSV output not yet implemented, falling back to text');\n    }\n    console.log(formatText(result));\n  });\n\nprogram.parse();\nEOF\ncat > src/analyzer.js << 'EOF'\nconst fs = require('fs');\nconst path = require('path');\n\nasync function analyze(projectDir, { depth = 1 } = {}) {\n  const pkgPath = path.join(projectDir, 'package.json');\n  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));\n  const deps = Object.keys(pkg.dependencies || {});\n  const devDeps = Object.keys(pkg.devDependencies || {});\n  return { name: pkg.name, version: pkg.version, deps, devDeps, depth };\n}\n\nmodule.exports = { analyze };\nEOF\ncat > src/formatter.js << 'EOF'\nfunction formatText(result) {\n  const lines = [\n    `Project: ${result.name} v${result.version}`,\n    `Dependencies (${result.deps.length}): ${result.deps.join(', ')}`,\n    `Dev dependencies (${result.devDeps.length}): ${result.devDeps.join(', ')}`,\n  ];\n  return lines.join('\\n');\n}\n\nmodule.exports = { formatText };\nEOF\ncat > README.md << 'EOF'\n# dep-report\n\nCLI tool that scans a Node.js project and generates a dependency report.\n\n## Usage\n\n```\ndep-report <project-dir> [--format text|json|csv] [--depth n]\n```\nEOF\ngit add . && git commit -m 'v0.3.1'",
+      "expected_output": "5 ranked ideas specific to dep-report. Must surface: (1) implement the stubbed json/csv --format output, (2) fix the FIXME crash when package.json is missing, (3) fill in the empty help text. Ideas must reference src/cli.js, src/formatter.js, or src/analyzer.js by name. Each idea must have effort estimate and a specific first step.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "five-ideas-produced",
+          "text": "The report contains exactly 5 numbered ideas"
+        },
+        {
+          "id": "json-csv-stub-surfaced",
+          "text": "The unimplemented --format json and --format csv options (currently stubbed with TODO comments in cli.js) are identified as an idea"
+        },
+        {
+          "id": "fixme-crash-surfaced",
+          "text": "The FIXME crash when projectDir has no package.json is identified as something to fix"
+        },
+        {
+          "id": "ideas-reference-actual-files",
+          "text": "At least 3 of the 5 ideas reference a specific source file (src/cli.js, src/analyzer.js, or src/formatter.js) in their 'Where to start' section"
+        },
+        {
+          "id": "effort-estimates-present",
+          "text": "Every idea includes an effort estimate (hours, days, or weeks)"
+        },
+        {
+          "id": "at-least-one-business-feature",
+          "text": "At least one idea is a new user-facing capability (not a technical fix) — something like CI/GitHub Actions integration, a watch mode that re-runs on file change, output to a shareable HTML report, or a similar feature that makes the tool more useful"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Give me ideas for improving this project",
+      "description": "React task manager app where the git history shows a half-finished 'recurring tasks' feature (branch merged with 'WIP' in commit message, RecurringTask component exists but is never rendered, and the recurrence field exists in the data model but is always null). The skill should notice the abandoned feature and other visible gaps (no due-date sorting, no bulk actions, no keyboard shortcuts). Tests whether the skill reads git history and actual component usage, not just README.",
+      "setup": "mkdir -p /tmp/eval-brainstorm-2/src/components && cd /tmp/eval-brainstorm-2 && git init && cat > package.json << 'EOF'\n{\n  \"name\": \"taskmaster\",\n  \"version\": \"1.2.0\",\n  \"description\": \"A task management app built with React\",\n  \"dependencies\": {\n    \"react\": \"^18.2.0\",\n    \"react-dom\": \"^18.2.0\",\n    \"date-fns\": \"^3.0.0\"\n  }\n}\nEOF\ncat > src/App.jsx << 'EOF'\nimport React, { useState } from 'react';\nimport TaskList from './components/TaskList';\nimport AddTask from './components/AddTask';\n// RecurringTask component exists but was never wired up\n// import RecurringTask from './components/RecurringTask';\n\nfunction App() {\n  const [tasks, setTasks] = useState([]);\n\n  const addTask = (text, dueDate) => {\n    setTasks([...tasks, {\n      id: Date.now(),\n      text,\n      dueDate,\n      completed: false,\n      recurrence: null  // always null — recurring tasks were never finished\n    }]);\n  };\n\n  const toggleTask = (id) => {\n    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));\n  };\n\n  // Tasks are shown in insertion order — no sorting by due date\n  return (\n    <div className=\"app\">\n      <h1>Taskmaster</h1>\n      <AddTask onAdd={addTask} />\n      <TaskList tasks={tasks} onToggle={toggleTask} />\n    </div>\n  );\n}\n\nexport default App;\nEOF\ncat > src/components/TaskList.jsx << 'EOF'\nimport React from 'react';\nimport TaskItem from './TaskItem';\n\n// No bulk select, no sort controls\nfunction TaskList({ tasks, onToggle }) {\n  if (tasks.length === 0) return <p>No tasks yet.</p>;\n  return (\n    <ul>\n      {tasks.map(task => (\n        <TaskItem key={task.id} task={task} onToggle={onToggle} />\n      ))}\n    </ul>\n  );\n}\n\nexport default TaskList;\nEOF\ncat > src/components/TaskItem.jsx << 'EOF'\nimport React from 'react';\nimport { format } from 'date-fns';\n\nfunction TaskItem({ task, onToggle }) {\n  return (\n    <li>\n      <input type=\"checkbox\" checked={task.completed} onChange={() => onToggle(task.id)} />\n      <span style={{ textDecoration: task.completed ? 'line-through' : 'none' }}>\n        {task.text}\n      </span>\n      {task.dueDate && <span className=\"due\">{format(new Date(task.dueDate), 'MMM d')}</span>}\n    </li>\n  );\n}\n\nexport default TaskItem;\nEOF\ncat > src/components/AddTask.jsx << 'EOF'\nimport React, { useState } from 'react';\n\n// No keyboard shortcut to quickly add (e.g. pressing N)\nfunction AddTask({ onAdd }) {\n  const [text, setText] = useState('');\n  const [dueDate, setDueDate] = useState('');\n\n  const handleSubmit = (e) => {\n    e.preventDefault();\n    if (!text.trim()) return;\n    onAdd(text, dueDate || null);\n    setText('');\n    setDueDate('');\n  };\n\n  return (\n    <form onSubmit={handleSubmit}>\n      <input value={text} onChange={e => setText(e.target.value)} placeholder=\"New task...\" />\n      <input type=\"date\" value={dueDate} onChange={e => setDueDate(e.target.value)} />\n      <button type=\"submit\">Add</button>\n    </form>\n  );\n}\n\nexport default AddTask;\nEOF\ncat > src/components/RecurringTask.jsx << 'EOF'\nimport React from 'react';\n\n// WIP — recurring task UI, never finished\nfunction RecurringTask({ task, onToggle }) {\n  // TODO: implement recurrence options (daily, weekly, monthly)\n  // TODO: auto-create next occurrence when task is completed\n  return (\n    <div className=\"recurring-task\">\n      <span>🔁 {task.text}</span>\n      <span>(recurrence: {task.recurrence || 'not set'})</span>\n    </div>\n  );\n}\n\nexport default RecurringTask;\nEOF\ncat > README.md << 'EOF'\n# Taskmaster\n\nA simple task management app. Add tasks with optional due dates, check them off when done.\nEOF\ngit add . && git commit -m 'initial commit'\ngit add src/components/RecurringTask.jsx && git commit -m 'WIP recurring tasks — not finished, leaving for later'",
+      "expected_output": "5 ranked ideas specific to Taskmaster. Must surface: (1) complete the abandoned recurring tasks feature (RecurringTask.jsx exists but is commented out in App.jsx, recurrence field is always null), (2) sort tasks by due date (currently insertion order only). Ideas must reference actual component filenames. Effort estimates required for all 5.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "five-ideas-produced",
+          "text": "The report contains exactly 5 numbered ideas"
+        },
+        {
+          "id": "recurring-tasks-surfaced",
+          "text": "The half-finished recurring tasks feature (RecurringTask.jsx exists and is commented out in App.jsx, recurrence field is always null) is identified as an idea worth completing"
+        },
+        {
+          "id": "due-date-sorting-surfaced",
+          "text": "The lack of due-date sorting (tasks shown in insertion order with no sort controls in TaskList.jsx) is identified as a gap"
+        },
+        {
+          "id": "ideas-reference-actual-files",
+          "text": "At least 3 of the 5 ideas reference a specific component file (App.jsx, TaskList.jsx, TaskItem.jsx, AddTask.jsx, or RecurringTask.jsx) in their 'Where to start' section"
+        },
+        {
+          "id": "effort-estimates-present",
+          "text": "Every idea includes an effort estimate (hours, days, or weeks)"
+        },
+        {
+          "id": "at-least-one-business-feature",
+          "text": "At least one idea is a new user-facing feature (not a technical fix) — something like task sharing/collaboration, reminder notifications, subtasks, project/label grouping, or a similar capability that makes the app more useful as a task manager"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What should I build next for this project?",
+      "description": "Spring Boot bookstore REST API with no TODOs, FIXMEs, or explicit hints. Issues are only visible from reading the code: list endpoints call findAll() with no pagination, getBook() calls Optional.get() with no @ControllerAdvice so a missing book throws NoSuchElementException (500 instead of 404), getBooksByAuthor() does findAll().stream().filter() instead of a derived query (full table scan), and no @Valid annotations anywhere. The skill must infer these from the code itself.",
+      "setup": "mkdir -p /tmp/eval-brainstorm-3/src/main/java/com/example/bookstore/controller /tmp/eval-brainstorm-3/src/main/java/com/example/bookstore/service /tmp/eval-brainstorm-3/src/main/java/com/example/bookstore/repository /tmp/eval-brainstorm-3/src/main/java/com/example/bookstore/model && cd /tmp/eval-brainstorm-3 && git init && cat > pom.xml << 'EOF'\n<project>\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>com.example</groupId>\n  <artifactId>bookstore</artifactId>\n  <version>0.1.0</version>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>3.2.0</version>\n  </parent>\n  <dependencies>\n    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>\n    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>\n    <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>runtime</scope></dependency>\n  </dependencies>\n</project>\nEOF\ncat > src/main/java/com/example/bookstore/model/Author.java << 'EOF'\npackage com.example.bookstore.model;\nimport jakarta.persistence.*;\n@Entity\npublic class Author {\n    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private Long id;\n    private String name;\n    private String bio;\n    public Long getId() { return id; }\n    public String getName() { return name; }\n    public String getBio() { return bio; }\n    public void setName(String name) { this.name = name; }\n    public void setBio(String bio) { this.bio = bio; }\n}\nEOF\ncat > src/main/java/com/example/bookstore/model/Book.java << 'EOF'\npackage com.example.bookstore.model;\nimport jakarta.persistence.*;\n@Entity\npublic class Book {\n    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private Long id;\n    private String title;\n    private String isbn;\n    private Double price;\n    @ManyToOne\n    private Author author;\n    public Long getId() { return id; }\n    public String getTitle() { return title; }\n    public String getIsbn() { return isbn; }\n    public Double getPrice() { return price; }\n    public Author getAuthor() { return author; }\n    public void setTitle(String t) { this.title = t; }\n    public void setIsbn(String i) { this.isbn = i; }\n    public void setPrice(Double p) { this.price = p; }\n    public void setAuthor(Author a) { this.author = a; }\n}\nEOF\ncat > src/main/java/com/example/bookstore/repository/BookRepository.java << 'EOF'\npackage com.example.bookstore.repository;\nimport com.example.bookstore.model.Book;\nimport org.springframework.data.jpa.repository.JpaRepository;\npublic interface BookRepository extends JpaRepository<Book, Long> {}\nEOF\ncat > src/main/java/com/example/bookstore/repository/AuthorRepository.java << 'EOF'\npackage com.example.bookstore.repository;\nimport com.example.bookstore.model.Author;\nimport org.springframework.data.jpa.repository.JpaRepository;\npublic interface AuthorRepository extends JpaRepository<Author, Long> {}\nEOF\ncat > src/main/java/com/example/bookstore/service/BookService.java << 'EOF'\npackage com.example.bookstore.service;\nimport com.example.bookstore.model.Book;\nimport com.example.bookstore.repository.BookRepository;\nimport org.springframework.stereotype.Service;\nimport java.util.List;\nimport java.util.stream.Collectors;\n@Service\npublic class BookService {\n    private final BookRepository bookRepository;\n    public BookService(BookRepository bookRepository) {\n        this.bookRepository = bookRepository;\n    }\n    public List<Book> getAllBooks() {\n        return bookRepository.findAll();\n    }\n    public Book getBook(Long id) {\n        return bookRepository.findById(id).get();\n    }\n    public List<Book> getBooksByAuthor(Long authorId) {\n        return bookRepository.findAll().stream()\n            .filter(b -> b.getAuthor() != null && b.getAuthor().getId().equals(authorId))\n            .collect(Collectors.toList());\n    }\n    public Book saveBook(Book book) {\n        return bookRepository.save(book);\n    }\n    public void deleteBook(Long id) {\n        bookRepository.deleteById(id);\n    }\n}\nEOF\ncat > src/main/java/com/example/bookstore/controller/BookController.java << 'EOF'\npackage com.example.bookstore.controller;\nimport com.example.bookstore.model.Book;\nimport com.example.bookstore.service.BookService;\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n@RestController\n@RequestMapping(\"/api/books\")\npublic class BookController {\n    private final BookService bookService;\n    public BookController(BookService bookService) {\n        this.bookService = bookService;\n    }\n    @GetMapping\n    public List<Book> listBooks() {\n        return bookService.getAllBooks();\n    }\n    @GetMapping(\"/{id}\")\n    public Book getBook(@PathVariable Long id) {\n        return bookService.getBook(id);\n    }\n    @GetMapping(\"/by-author/{authorId}\")\n    public List<Book> getBooksByAuthor(@PathVariable Long authorId) {\n        return bookService.getBooksByAuthor(authorId);\n    }\n    @PostMapping\n    public Book createBook(@RequestBody Book book) {\n        return bookService.saveBook(book);\n    }\n    @PutMapping(\"/{id}\")\n    public Book updateBook(@PathVariable Long id, @RequestBody Book book) {\n        book.setTitle(book.getTitle());\n        return bookService.saveBook(book);\n    }\n    @DeleteMapping(\"/{id}\")\n    public void deleteBook(@PathVariable Long id) {\n        bookService.deleteBook(id);\n    }\n}\nEOF\ncat > src/main/java/com/example/bookstore/controller/AuthorController.java << 'EOF'\npackage com.example.bookstore.controller;\nimport com.example.bookstore.model.Author;\nimport com.example.bookstore.repository.AuthorRepository;\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n@RestController\n@RequestMapping(\"/api/authors\")\npublic class AuthorController {\n    private final AuthorRepository authorRepository;\n    public AuthorController(AuthorRepository authorRepository) {\n        this.authorRepository = authorRepository;\n    }\n    @GetMapping\n    public List<Author> listAuthors() {\n        return authorRepository.findAll();\n    }\n    @GetMapping(\"/{id}\")\n    public Author getAuthor(@PathVariable Long id) {\n        return authorRepository.findById(id).get();\n    }\n    @PostMapping\n    public Author createAuthor(@RequestBody Author author) {\n        return authorRepository.save(author);\n    }\n}\nEOF\ncat > README.md << 'EOF'\n# Bookstore API\n\nA REST API for managing a bookstore catalog. Built with Spring Boot and JPA.\n\n## Endpoints\n- GET /api/books — list all books\n- GET /api/books/:id — get a book\n- GET /api/books/by-author/:authorId — books by author\n- POST /api/books — create a book\n- PUT /api/books/:id — update a book\n- DELETE /api/books/:id — delete a book\n- GET /api/authors — list all authors\n- GET /api/authors/:id — get an author\n- POST /api/authors — create an author\nEOF\ngit add . && git commit -m 'initial bookstore API'",
+      "expected_output": "5 ranked ideas inferred purely from reading the code — no TODO/FIXME hints present. Must identify: (1) pagination missing on list endpoints (findAll() with no Pageable), (2) missing error handling — Optional.get() in BookService.getBook() and AuthorController.getAuthor() will throw NoSuchElementException returning 500 instead of 404, (3) inefficient full-table-scan in BookService.getBooksByAuthor() doing findAll().stream().filter() instead of a JPA derived query. Ideas must reference actual class names.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "five-ideas-produced",
+          "text": "The report contains exactly 5 numbered ideas"
+        },
+        {
+          "id": "pagination-gap-identified",
+          "text": "The missing pagination on list endpoints is identified — specifically that getAllBooks() or listBooks() returns all rows with no Pageable/page parameter"
+        },
+        {
+          "id": "missing-error-handling-identified",
+          "text": "The missing error handling is identified — Optional.get() in BookService or AuthorController will throw NoSuchElementException (500) instead of returning a 404 when a resource is not found"
+        },
+        {
+          "id": "ideas-reference-actual-classes",
+          "text": "At least 3 of the 5 ideas reference a specific class from the project (BookController, BookService, AuthorController, BookRepository, or AuthorRepository) in their 'Where to start' section"
+        },
+        {
+          "id": "effort-estimates-present",
+          "text": "Every idea includes an effort estimate (hours, days, or weeks)"
+        },
+        {
+          "id": "at-least-one-business-feature",
+          "text": "At least one idea is a new user-facing feature (not a technical fix) — something like book search/filtering by title or genre, a wishlist or reading list, stock/inventory alerts, order management, book recommendations, or a similar capability that adds business value to a bookstore API"
+        }
+      ]
+    }
+    ,
+    {
+      "id": 4,
+      "prompt": "Give me 5 ideas for this project",
+      "description": "Go URL shortener with no hints, TODOs, or FIXMEs. Issues are only visible from reading the code: in-memory store (all links lost on restart), math/rand slug generation (not crypto/rand), no click tracking at all, no slug collision check, no custom slug support. Tests whether the skill's imagination lens produces genuinely new business features (click analytics, custom slugs, link expiry, QR codes) rather than just fixing visible code issues.",
+      "setup": "mkdir -p /tmp/eval-brainstorm-4 && cd /tmp/eval-brainstorm-4 && git init && cat > go.mod << 'EOF'\nmodule github.com/example/shortlink\n\ngo 1.21\nEOF\ncat > main.go << 'EOF'\npackage main\n\nimport (\n\t\"fmt\"\n\t\"math/rand\"\n\t\"net/http\"\n\t\"strings\"\n\t\"sync\"\n)\n\nvar (\n\tstore = map[string]string{}\n\tmu    sync.RWMutex\n)\n\nconst charset = \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\"\n\nfunc generateSlug() string {\n\tb := make([]byte, 6)\n\tfor i := range b {\n\t\tb[i] = charset[rand.Intn(len(charset))]\n\t}\n\treturn string(b)\n}\n\nfunc shortenHandler(w http.ResponseWriter, r *http.Request) {\n\tif r.Method != http.MethodPost {\n\t\thttp.Error(w, \"method not allowed\", http.StatusMethodNotAllowed)\n\t\treturn\n\t}\n\turl := r.FormValue(\"url\")\n\tif url == \"\" {\n\t\thttp.Error(w, \"url is required\", http.StatusBadRequest)\n\t\treturn\n\t}\n\tif !strings.HasPrefix(url, \"http://\") && !strings.HasPrefix(url, \"https://\") {\n\t\thttp.Error(w, \"url must start with http:// or https://\", http.StatusBadRequest)\n\t\treturn\n\t}\n\tslug := generateSlug()\n\tmu.Lock()\n\tstore[slug] = url\n\tmu.Unlock()\n\tfmt.Fprintf(w, \"http://localhost:8080/%s\\n\", slug)\n}\n\nfunc redirectHandler(w http.ResponseWriter, r *http.Request) {\n\tslug := strings.TrimPrefix(r.URL.Path, \"/\")\n\tif slug == \"\" {\n\t\thttp.NotFound(w, r)\n\t\treturn\n\t}\n\tmu.RLock()\n\ttarget, ok := store[slug]\n\tmu.RUnlock()\n\tif !ok {\n\t\thttp.NotFound(w, r)\n\t\treturn\n\t}\n\thttp.Redirect(w, r, target, http.StatusFound)\n}\n\nfunc main() {\n\thttp.HandleFunc(\"/shorten\", shortenHandler)\n\thttp.HandleFunc(\"/\", redirectHandler)\n\tfmt.Println(\"Listening on :8080\")\n\thttp.ListenAndServe(\":8080\", nil)\n}\nEOF\ncat > README.md << 'EOF'\n# shortlink\n\nA minimal URL shortener written in Go. POST a long URL, get a short link back.\n\n## Usage\n\n    curl -X POST -d \"url=https://example.com\" http://localhost:8080/shorten\n    # → http://localhost:8080/aBcDeF\n\n    curl -L http://localhost:8080/aBcDeF\n    # → redirects to https://example.com\n\n## Running\n\n    go run main.go\nEOF\ngit add . && git commit -m 'initial url shortener'",
+      "expected_output": "5 ranked ideas. Must identify: (1) the in-memory store (links lost on restart), (2) the complete absence of click tracking. Must include at least one genuinely new business feature not hinted at in the code — custom slugs, click analytics, link expiry, QR code generation, or similar. Ideas must reference main.go or specific function names.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "five-ideas-produced",
+          "text": "The report contains exactly 5 numbered ideas"
+        },
+        {
+          "id": "in-memory-storage-identified",
+          "text": "The in-memory store (all links stored in a plain Go map, lost on every restart with no persistence) is identified as a problem"
+        },
+        {
+          "id": "click-tracking-missing",
+          "text": "The complete absence of click tracking or analytics is identified as a gap — the redirectHandler does nothing but redirect, with no counting or logging of clicks"
+        },
+        {
+          "id": "ideas-reference-actual-files",
+          "text": "At least 3 of the 5 ideas reference main.go or a specific function from the project (generateSlug, shortenHandler, redirectHandler) in their 'Where to start' section"
+        },
+        {
+          "id": "effort-estimates-present",
+          "text": "Every idea includes an effort estimate (hours, days, or weeks)"
+        },
+        {
+          "id": "at-least-one-business-feature",
+          "text": "At least one idea is a genuinely new user-facing capability not hinted at anywhere in the code — something like click analytics/dashboard, custom branded slugs, link expiry dates, QR code generation, bulk link management, or a similar capability that makes the service more valuable"
+        }
+      ]
+    }
+  ]
+}

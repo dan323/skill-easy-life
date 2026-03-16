@@ -23,6 +23,7 @@ Skills are copied to `~/.claude/skills/` and `~/.copilot/skills/` and become ava
 | [`find-dead-code`](skills/find-dead-code/SKILL.md)     | Find unused functions, classes, imports, and variables        |
 | [`improve-logging`](skills/improve-logging/SKILL.md)   | Audit log quality and produce prioritised fix recommendations |
 | [`find-breaking-rest-api`](skills/find-breaking-rest-api/SKILL.md) | Detect breaking changes in REST APIs by comparing git history         |
+| [`brainstorm`](skills/brainstorm/SKILL.md)             | Read the project and suggest the 5 most valuable features or improvements to build next |
 
 ## Documentation
 
