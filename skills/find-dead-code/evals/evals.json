@@ -144,6 +144,122 @@
           "text": "_truly_unused is reported at High confidence"
         }
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Find dead code in this project",
+      "description": "Java Spring @Configuration class with three @Bean factory methods and one genuinely dead private helper. @Bean methods are never called directly — Spring calls them via CGLIB proxy — so a naive scanner would flag them. Only the private non-@Bean helper should be flagged.",
+      "setup": "mkdir -p /tmp/eval-dead-6/src/config && cd /tmp/eval-dead-6 && git init && cat > src/config/AppConfig.java << 'EOF'\nimport org.springframework.context.annotation.Bean;\nimport org.springframework.context.annotation.Configuration;\n\n@Configuration\npublic class AppConfig {\n\n    @Bean\n    public UserRepository userRepository() {\n        return new JdbcUserRepository(dataSourceUrl());\n    }\n\n    @Bean\n    public EmailService emailService() {\n        return new SmtpEmailService(mailHost());\n    }\n\n    @Bean\n    public String mailHost() {\n        return System.getenv(\"MAIL_HOST\");\n    }\n\n    private String dataSourceUrl() {\n        return \"jdbc:mysql://localhost/app\";\n    }\n\n    private String buildLegacyJdbcUrl(String host, int port, String db) {\n        return \"jdbc:\" + host + \":\" + port + \"/\" + db;\n    }\n}\nEOF",
+      "expected_output": "userRepository(), emailService(), and mailHost() are NOT flagged — they carry @Bean and are invoked by the Spring container via CGLIB proxy. dataSourceUrl() is NOT flagged — it is called by userRepository(). buildLegacyJdbcUrl() IS flagged as High confidence (private, no callers, no Spring annotation). Report explicitly notes that @Configuration/@Bean methods were detected and excluded.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "bean-methods-not-flagged",
+          "text": "userRepository, emailService, and mailHost are NOT listed as dead code findings (they carry @Bean)"
+        },
+        {
+          "id": "configuration-exclusion-noted",
+          "text": "The report mentions @Configuration or @Bean as the reason for excluding those methods"
+        },
+        {
+          "id": "dead-private-flagged",
+          "text": "buildLegacyJdbcUrl is flagged as a dead code finding"
+        },
+        {
+          "id": "dead-private-high-confidence",
+          "text": "buildLegacyJdbcUrl is reported at High confidence (it is private with zero callers)"
+        },
+        {
+          "id": "helper-called-by-bean-not-flagged",
+          "text": "dataSourceUrl is NOT listed as dead code (it is called by userRepository)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Find unused code in this codebase",
+      "description": "Java project where EventBus calls getDeclaredMethod(\"on\" + eventType) — constructing method names at runtime by concatenation. OrderHandler has two on* methods reachable via this reflection pattern and one genuinely dead private method. The on* methods must not be flagged at High confidence; the dead private must be.",
+      "setup": "mkdir -p /tmp/eval-dead-7/src && cd /tmp/eval-dead-7 && git init && cat > src/EventBus.java << 'EOF'\nimport java.lang.reflect.Method;\nimport java.util.HashMap;\nimport java.util.Map;\n\npublic class EventBus {\n    private final Map<String, Object> handlers = new HashMap<>();\n\n    public void register(String eventType, Object handler) {\n        handlers.put(eventType, handler);\n    }\n\n    public void publish(String eventType, Object payload) throws Exception {\n        Object handler = handlers.get(eventType);\n        if (handler != null) {\n            Method m = handler.getClass().getDeclaredMethod(\"on\" + eventType, Object.class);\n            m.invoke(handler, payload);\n        }\n    }\n}\nEOF\ncat > src/OrderHandler.java << 'EOF'\npublic class OrderHandler {\n\n    public void onPlaced(Object payload) {\n        // invoked via EventBus.publish(\"Placed\", payload)\n    }\n\n    public void onCancelled(Object payload) {\n        // invoked via EventBus.publish(\"Cancelled\", payload)\n    }\n\n    private void validateOrder(Object payload) {\n        // genuinely unused — not called by anything, name does not match \"on\" + eventType pattern\n    }\n}\nEOF",
+      "expected_output": "Report detects getDeclaredMethod with a string-concatenated argument. onPlaced and onCancelled are at Low confidence with a reflection warning — they match the \\\"on\\\" + eventType pattern. validateOrder is High confidence — it is private, has no callers, and its name does not match the reflection pattern.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "get-declared-method-detected",
+          "text": "The report mentions getDeclaredMethod or Java reflection as a risk factor"
+        },
+        {
+          "id": "on-methods-not-high-confidence",
+          "text": "Neither onPlaced nor onCancelled is reported at High confidence"
+        },
+        {
+          "id": "on-methods-have-reflection-warning",
+          "text": "The report includes a warning that onPlaced or onCancelled may be invoked via reflection (getDeclaredMethod)"
+        },
+        {
+          "id": "dead-private-high-confidence",
+          "text": "validateOrder is flagged at High confidence (private method, zero callers, does not match the reflection pattern)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Find dead code in this Java project",
+      "description": "Spring @Service class with one @EventListener method and one @Scheduled method. Both have zero direct Java callers — Spring invokes them automatically. The class also has a private method called by the @EventListener handler and a genuinely dead private method. Only the dead private should be flagged.",
+      "setup": "mkdir -p /tmp/eval-dead-8/src && cd /tmp/eval-dead-8 && git init && cat > src/NotificationService.java << 'EOF'\nimport org.springframework.context.event.EventListener;\nimport org.springframework.scheduling.annotation.Scheduled;\nimport org.springframework.stereotype.Service;\nimport java.util.List;\n\n@Service\npublic class NotificationService {\n\n    @EventListener\n    public void onUserCreated(Object event) {\n        sendWelcomeEmail(event);\n    }\n\n    @Scheduled(cron = \"0 0 8 * * MON-FRI\")\n    public void sendDailyDigest() {\n        // Spring Scheduler calls this on the configured schedule\n    }\n\n    private void sendWelcomeEmail(Object event) {\n        // called by onUserCreated above\n    }\n\n    private String buildDigestBody(List<String> items) {\n        // never called — sendDailyDigest does not use this\n        return String.join(\"\\n\", items);\n    }\n}\nEOF",
+      "expected_output": "onUserCreated is NOT flagged (@EventListener — Spring dispatches events to it). sendDailyDigest is NOT flagged (@Scheduled — Spring calls it on schedule). sendWelcomeEmail is NOT flagged (called by onUserCreated). buildDigestBody IS flagged as High confidence (private, no callers, not annotation-managed). Report notes @EventListener and @Scheduled as exclusion reasons.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "event-listener-not-flagged",
+          "text": "onUserCreated is NOT listed as dead code (@EventListener method)"
+        },
+        {
+          "id": "scheduled-not-flagged",
+          "text": "sendDailyDigest is NOT listed as dead code (@Scheduled method)"
+        },
+        {
+          "id": "lifecycle-annotations-mentioned",
+          "text": "The report mentions @EventListener or @Scheduled as the reason these methods were excluded"
+        },
+        {
+          "id": "called-private-not-flagged",
+          "text": "sendWelcomeEmail is NOT listed as dead code (it is called by onUserCreated)"
+        },
+        {
+          "id": "dead-private-flagged",
+          "text": "buildDigestBody is flagged as a dead code finding"
+        },
+        {
+          "id": "dead-private-high-confidence",
+          "text": "buildDigestBody is reported at High confidence"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Find dead code",
+      "description": "Java project where AppRunner retrieves a bean by string name via ApplicationContext.getBean(\"reportService\"). ReportService has no @Component annotation but Spring's default naming convention maps the class name ReportService to the bean name \"reportService\". The skill must detect the getBean call, match it to ReportService by naming convention, and avoid flagging it at High confidence. DataCleaner has no annotation and no getBean reference — it IS dead.",
+      "setup": "mkdir -p /tmp/eval-dead-9/src && cd /tmp/eval-dead-9 && git init && cat > src/ReportService.java << 'EOF'\npublic class ReportService {\n\n    public void generate(String type) {\n        archive(type + \"-\" + System.currentTimeMillis());\n    }\n\n    public void archive(String reportId) {\n        // persist to storage\n    }\n}\nEOF\ncat > src/DataCleaner.java << 'EOF'\npublic class DataCleaner {\n\n    public void clean() {\n        // never called from anywhere in the codebase\n    }\n\n    public void purgeOldRecords(int daysOld) {\n        // also never called\n    }\n}\nEOF\ncat > src/AppRunner.java << 'EOF'\nimport org.springframework.context.ApplicationContext;\nimport org.springframework.stereotype.Component;\n\n@Component\npublic class AppRunner {\n    private final ApplicationContext ctx;\n\n    public AppRunner(ApplicationContext ctx) {\n        this.ctx = ctx;\n    }\n\n    public void run() {\n        // Spring's default bean name for ReportService.class is \"reportService\"\n        ReportService rs = (ReportService) ctx.getBean(\"reportService\");\n        rs.generate(\"monthly\");\n    }\n}\nEOF",
+      "expected_output": "Report detects ctx.getBean(\"reportService\") and notes that by Spring's default naming convention (uncapitalize class name) this matches ReportService. ReportService is NOT flagged at High confidence — it may be the intended target of getBean. DataCleaner IS flagged — no annotation, no matching getBean call, no direct callers.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "getbean-detected",
+          "text": "The report mentions getBean or ApplicationContext dynamic retrieval as a risk factor"
+        },
+        {
+          "id": "report-service-not-high-confidence",
+          "text": "ReportService is NOT reported at High confidence (it matches the getBean(\"reportService\") call by Spring naming convention)"
+        },
+        {
+          "id": "naming-convention-explained",
+          "text": "The report explains that \"reportService\" was matched to ReportService via Spring's default bean naming convention (uncapitalize the class name)"
+        },
+        {
+          "id": "data-cleaner-flagged",
+          "text": "DataCleaner is flagged as a dead code finding (no annotation, no getBean reference, no direct callers)"
+        }
+      ]
     }
   ]
 }

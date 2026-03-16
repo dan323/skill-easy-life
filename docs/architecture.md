@@ -9,13 +9,23 @@ agent-skills is a content repository — there is no compiled code, no runtime, 
 ```
 agent-skills/
 ├── scripts/
-│   ├── install.sh          Unix installer
-│   └── install.ps1         Windows installer
-└── skills/
-    └── <skill-name>/
-        ├── SKILL.md         Required — instructions the agent follows
-        └── evals/
-            └── evals.json   Optional — test cases for the skill
+│   ├── install.sh           Unix installer
+│   └── install.ps1          Windows installer
+├── docs/
+│   ├── getting-started.md
+│   ├── architecture.md
+│   └── contributing.md
+├── skills/
+│   ├── changelog/
+│   │   ├── SKILL.md         Required — instructions the agent follows
+│   │   └── evals/
+│   │       └── evals.json   Optional — test cases for the skill
+│   ├── document-project/    (same layout)
+│   ├── find-breaking-rest-api/
+│   ├── find-dead-code/
+│   └── improve-logging/
+├── CHANGELOG.md
+└── README.md
 ```
 
 ## How Skills Work

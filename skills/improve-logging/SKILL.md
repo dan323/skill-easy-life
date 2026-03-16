@@ -226,7 +226,27 @@ grep -rn "console\.log" --include="*.ts" --include="*.js" . | grep -i "error\|fa
 
 Read through error-handling paths in representative files — grep catches obvious mismatches, but reading reveals the subtler ones (e.g. a re-raise with no preceding log).
 
-### 3c. Poor message quality
+### 3c. Logs to remove
+
+Scan for log calls that should be deleted entirely rather than improved. Flag all matches — these are the highest-priority recommendations because sensitive data in logs is a security incident waiting to happen.
+
+**Sensitive data:**
+```bash
+# Common sensitive field names in log arguments
+grep -rn "password\|passwd\|secret\|api_key\|apikey\|token\|credential\|ssn\|credit_card\|cvv\|private_key" \
+  --include="*.py" --include="*.java" --include="*.ts" --include="*.js" --include="*.go" --include="*.rb" . \
+  | grep -i "log\|logger\|print\|console" | head -30
+```
+
+Flag any log call that passes a sensitive field as a parameter or includes it in the message string. Include a clear explanation of the security risk (e.g. "API keys in logs are stored in plain text and accessible to anyone with log access, including log aggregation services").
+
+**Debug artifacts:** `print()` in Python, `console.log()` / `console.debug()` in JS/TS, `fmt.Println()` in Go, `System.out.println()` in Java — these are almost never intentional in production code. Flag all of them.
+
+**Log spam:** log calls inside tight loops (for/while) that fire on every iteration. A single INFO log per item in a large batch creates millions of log entries. Suggest replacing with a summary log after the loop (e.g. `"Processed N items in Xms"`).
+
+**Redundant logs:** multiple log calls at the same level for the same event within a few lines, where one clearly subsumes the other.
+
+### 3d. Poor message quality
 
 A good log message answers: *what happened, in what context, and why does it matter?*
 
@@ -248,7 +268,7 @@ grep -rn 'log\.\w\+("\w\{1,10\}")' --include="*.java" . | head -20
 
 For files with message quality issues, read the surrounding code to suggest a better message that includes the relevant context variables.
 
-### 3d. Inconsistency with the established pattern
+### 3e. Inconsistency with the established pattern
 
 Compare each log call against the pattern established in Phase 2:
 - Logger instantiated differently than the norm
@@ -258,7 +278,9 @@ Compare each log call against the pattern established in Phase 2:
 
 ## Phase 4: Output the Report
 
-Group all findings into a single report. Order: **Missing logs → Wrong level → Poor messages → Inconsistencies**.
+Group all findings into a single report. Order: **Remove → Missing logs → Wrong level → Poor messages → Inconsistencies**.
+
+Put Remove first because sensitive data in logs is an immediate security risk — it must be addressed before any other improvement.
 
 Within each section, order by file. For each finding include the file path, line number, the current code (if any), and a concrete suggested improvement.
 
@@ -276,7 +298,21 @@ Example:
 
 ---
 
-### 1. Missing Log Statements   (N findings)
+### 1. Remove   (N findings)
+
+**src/auth/login.py:14** — sensitive field in log
+  Current:  `logger.info("login success", extra={"user_id": user.id, "password": password})`
+  Remove:   the `password` field from the extra dict
+  Why: passwords in logs are stored in plain text and accessible to everyone with log access, including log aggregation services
+
+**src/debug/util.py:8** — debug artifact
+  Current:  `print(f"Login attempt for {username}")`
+  Action:   Replace with `logger.info("auth.login_attempt", username=username)` or remove
+  Why: print() bypasses the logging framework and cannot be filtered or silenced in production
+
+---
+
+### 2. Missing Log Statements   (N findings)
 
 **src/payments/processor.py:88** — error path with no log
   Context: `except StripeError as e:`
@@ -336,7 +372,7 @@ Example:
 | **Total**             |**20** |
 
 ### Recommended next steps
-- Address "Remove" first — sensitive data in logs is an immediate security risk.
+- Address "Remove" immediately — sensitive data in logs is a security incident waiting to happen.
 - Address "Missing log statements" next — silent error paths are the highest operational risk.
 - Apply the established pattern to all new log calls going forward.
 - Consider adding a linting rule to enforce log level discipline in CI.

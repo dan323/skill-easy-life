@@ -43,13 +43,13 @@ A `SKILL.md` file contains:
 
 ## Current Skills
 
-| Skill              | File                               | Purpose                                                  |
-|--------------------|------------------------------------|----------------------------------------------------------|
-| `changelog`        | `skills/changelog/SKILL.md`        | Generate/update CHANGELOG.md from git history            |
-| `document-project` | `skills/document-project/SKILL.md` | Create README + `/docs` structure                        |
-| `find-dead-code`   | `skills/find-dead-code/SKILL.md`   | Find unused functions, classes, imports across languages |
-
-`skills/improve-logging/` exists as a placeholder with no `SKILL.md` yet.
+| Skill                    | File                                     | Purpose                                                                   |
+|--------------------------|------------------------------------------|---------------------------------------------------------------------------|
+| `changelog`              | `skills/changelog/SKILL.md`              | Generate/update CHANGELOG.md from git history                             |
+| `document-project`       | `skills/document-project/SKILL.md`       | Create README + `/docs` structure                                         |
+| `find-dead-code`         | `skills/find-dead-code/SKILL.md`         | Find unused functions, classes, imports across languages                  |
+| `find-breaking-rest-api` | `skills/find-breaking-rest-api/SKILL.md` | Find breaking REST API changes — multi-file routers, shared schemas, auth |
+| `improve-logging`        | `skills/improve-logging/SKILL.md`        | Audit logging quality and produce prioritised fix recommendations         |
 
 ## Adding a New Skill
 

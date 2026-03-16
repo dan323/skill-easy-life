@@ -1,0 +1,345 @@
+{
+  "skill_name": "find-breaking-rest-api",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Find breaking API changes in this project",
+      "description": "Express.js app with routes split across multiple router files. The main app.js mounts routers at different prefixes. One router's mount prefix changes (/users -> /api/v2/users), causing all its routes to move. Another router removes one endpoint and adds a new one. The skill must reconstruct full paths by combining app.use() prefix with route-level paths.",
+      "setup": "mkdir -p /tmp/eval-rest-0/src/routes && cd /tmp/eval-rest-0 && git init && cat > src/app.js << 'EOF'\nconst express = require('express');\nconst app = express();\nconst usersRouter = require('./routes/users');\nconst ordersRouter = require('./routes/orders');\n\napp.use('/users', usersRouter);\napp.use('/orders', ordersRouter);\n\nmodule.exports = app;\nEOF\ncat > src/routes/users.js << 'EOF'\nconst router = require('express').Router();\n\nrouter.get('/', (req, res) => res.json([]));\nrouter.get('/:id', (req, res) => res.json({}));\nrouter.post('/', (req, res) => res.status(201).json({}));\nrouter.delete('/:id', (req, res) => res.status(204).send());\n\nmodule.exports = router;\nEOF\ncat > src/routes/orders.js << 'EOF'\nconst router = require('express').Router();\n\nrouter.get('/', (req, res) => res.json([]));\nrouter.get('/:id', (req, res) => res.json({}));\nrouter.post('/', (req, res) => res.status(201).json({}));\nrouter.delete('/:id', (req, res) => res.status(204).send());\n\nmodule.exports = router;\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/app.js << 'EOF'\nconst express = require('express');\nconst app = express();\nconst usersRouter = require('./routes/users');\nconst ordersRouter = require('./routes/orders');\n\napp.use('/api/v2/users', usersRouter);\napp.use('/orders', ordersRouter);\n\nmodule.exports = app;\nEOF\ncat > src/routes/orders.js << 'EOF'\nconst router = require('express').Router();\n\nrouter.get('/', (req, res) => res.json([]));\nrouter.get('/:id', (req, res) => res.json({}));\nrouter.post('/', (req, res) => res.status(201).json({}));\nrouter.patch('/:id', (req, res) => res.json({}));\n\nmodule.exports = router;\nEOF\ngit add . && git commit -m 'move users to /api/v2, replace orders DELETE with PATCH'",
+      "expected_output": "GET /users, GET /users/:id, POST /users, DELETE /users/:id all flagged as breaking path changes (moved to /api/v2/users prefix). DELETE /orders/:id flagged as removed (breaking). PATCH /orders/:id flagged as new non-breaking addition. The skill must trace the prefix from app.js to determine full paths.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "users-path-prefix-breaking",
+          "text": "The path change from /users to /api/v2/users is flagged as breaking (all user routes moved)"
+        },
+        {
+          "id": "orders-delete-removed-breaking",
+          "text": "DELETE /orders/:id is flagged as a breaking change because the endpoint was removed"
+        },
+        {
+          "id": "orders-patch-non-breaking",
+          "text": "PATCH /orders/:id is listed as a non-breaking addition"
+        },
+        {
+          "id": "prefix-traced-from-app",
+          "text": "The report identifies that the full path was determined by combining the app.use() prefix with the route-level path (i.e. it found the prefix in app.js, not just the route file)"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Check for breaking API changes",
+      "description": "FastAPI app where a shared Pydantic response model is used by three endpoints. A field is removed from the shared model (breaking all three), and a new required field is added to a request model for one endpoint. A new optional field is also added to the shared response model. The skill must identify that the shared model change cascades to all endpoints that use it.",
+      "setup": "mkdir -p /tmp/eval-rest-1/app && cd /tmp/eval-rest-1 && git init && cat > app/models.py << 'EOF'\nfrom pydantic import BaseModel\nfrom typing import Optional\n\nclass JobResponse(BaseModel):\n    id: str\n    status: str\n    eta_seconds: int\n    result: Optional[dict] = None\n\nclass CreateJobRequest(BaseModel):\n    payload: dict\n    priority: str = 'normal'\nEOF\ncat > app/routes.py << 'EOF'\nfrom fastapi import FastAPI\nfrom .models import JobResponse, CreateJobRequest\n\napp = FastAPI()\n\n@app.post('/jobs', response_model=JobResponse)\ndef create_job(req: CreateJobRequest):\n    return JobResponse(id='123', status='pending', eta_seconds=30)\n\n@app.get('/jobs/{job_id}', response_model=JobResponse)\ndef get_job(job_id: str):\n    return JobResponse(id=job_id, status='done', eta_seconds=0)\n\n@app.get('/jobs/{job_id}/status', response_model=JobResponse)\ndef get_job_status(job_id: str):\n    return JobResponse(id=job_id, status='running', eta_seconds=10)\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > app/models.py << 'EOF'\nfrom pydantic import BaseModel\nfrom typing import Optional\n\nclass JobResponse(BaseModel):\n    id: str\n    status: str\n    queue_position: int\n    result: Optional[dict] = None\n\nclass CreateJobRequest(BaseModel):\n    payload: dict\n    priority: str = 'normal'\n    tenant_id: str\nEOF\ngit add . && git commit -m 'replace eta_seconds with queue_position; add required tenant_id to CreateJobRequest'",
+      "expected_output": "eta_seconds removed from JobResponse is breaking for ALL THREE endpoints (POST /jobs, GET /jobs/{job_id}, GET /jobs/{job_id}/status) because they all use JobResponse as response_model. queue_position added is non-breaking (new field). tenant_id added as required field to CreateJobRequest is breaking for POST /jobs (clients that omit it will get 422). The report must connect the shared model change to all affected endpoints.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "eta-seconds-removal-cascades",
+          "text": "The removal of eta_seconds from JobResponse is flagged as breaking and the report identifies that it affects all three endpoints (POST /jobs, GET /jobs/{id}, GET /jobs/{id}/status)"
+        },
+        {
+          "id": "queue-position-non-breaking",
+          "text": "The addition of queue_position to JobResponse is listed as non-breaking (new optional response field)"
+        },
+        {
+          "id": "tenant-id-required-breaking",
+          "text": "The addition of tenant_id as a required field in CreateJobRequest is flagged as breaking for POST /jobs (clients that omit it will get a 422 validation error)"
+        },
+        {
+          "id": "shared-model-identified",
+          "text": "The report identifies that the breaking change originates from a shared model (JobResponse in models.py) rather than listing each endpoint independently without explanation"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "What breaking changes are there in this API?",
+      "description": "Spring Boot REST controller where the class-level @RequestMapping sets the base path. A method's path changes, a method gets a required request parameter added, and auth is added to one previously open endpoint via @PreAuthorize. The full path must be assembled from class + method annotations.",
+      "setup": "mkdir -p /tmp/eval-rest-2/src && cd /tmp/eval-rest-2 && git init && cat > src/UserController.java << 'EOF'\nimport org.springframework.web.bind.annotation.*;\nimport org.springframework.web.bind.annotation.RequestMapping;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/api/users\")\npublic class UserController {\n\n    @GetMapping(\"\")\n    public List<User> listUsers(@RequestParam(required = false) String role) {\n        return userService.findAll(role);\n    }\n\n    @GetMapping(\"/{id}\")\n    public User getUser(@PathVariable Long id) {\n        return userService.findById(id);\n    }\n\n    @PostMapping(\"\")\n    public User createUser(@RequestBody CreateUserRequest req) {\n        return userService.create(req);\n    }\n\n    @GetMapping(\"/export\")\n    public byte[] exportUsers() {\n        return userService.exportCsv();\n    }\n}\nEOF\ngit add . && git commit -m 'v2.0.0' && git tag v2.0.0\ncat > src/UserController.java << 'EOF'\nimport org.springframework.web.bind.annotation.*;\nimport org.springframework.security.access.prepost.PreAuthorize;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/api/v2/users\")\npublic class UserController {\n\n    @GetMapping(\"\")\n    public List<User> listUsers(@RequestParam(required = false) String role) {\n        return userService.findAll(role);\n    }\n\n    @GetMapping(\"/{id}\")\n    public User getUser(@PathVariable Long id) {\n        return userService.findById(id);\n    }\n\n    @PostMapping(\"\")\n    public User createUser(@RequestBody CreateUserRequest req) {\n        return userService.create(req);\n    }\n\n    @GetMapping(\"/reports\")\n    @PreAuthorize(\"hasRole('ADMIN')\")\n    public byte[] exportUsers(@RequestParam(required = true) String format) {\n        return userService.export(format);\n    }\n}\nEOF\ngit add . && git commit -m 'move to /api/v2/users, rename /export to /reports with auth and required format param'",
+      "expected_output": "All endpoints at /api/users/* are breaking path changes because the class-level @RequestMapping changed from /api/users to /api/v2/users. GET /api/users/export renamed to GET /api/v2/users/reports (path changed + endpoint effectively removed). GET /api/v2/users/reports requires ADMIN role (auth added, breaking for unauthenticated clients) and a required 'format' param (breaking for clients not sending it). The skill must combine class-level and method-level annotations for full paths.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "class-level-mapping-change-breaking",
+          "text": "The change to the class-level @RequestMapping (from /api/users to /api/v2/users) is identified as the source of all path changes, affecting every endpoint in the controller"
+        },
+        {
+          "id": "export-to-reports-breaking",
+          "text": "The rename of /export to /reports is flagged as a breaking path change (GET /api/users/export is gone)"
+        },
+        {
+          "id": "auth-added-breaking",
+          "text": "The addition of @PreAuthorize('hasRole(ADMIN)') to the reports endpoint is flagged as a breaking change (previously open endpoint now requires ADMIN role)"
+        },
+        {
+          "id": "required-param-added-breaking",
+          "text": "The addition of the required 'format' request parameter to GET /api/v2/users/reports is flagged as breaking"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find breaking changes in this API",
+      "description": "Flask app using Blueprints. A blueprint's url_prefix changes at registration time (in app.py), and within the blueprint a route's HTTP method changes (GET -> POST) and a response field is removed. The skill must trace the blueprint prefix from the registration call, not from the route decorators themselves.",
+      "setup": "mkdir -p /tmp/eval-rest-3/app && cd /tmp/eval-rest-3 && git init && cat > app/__init__.py << 'EOF'\nfrom flask import Flask\nfrom .reports import reports_bp\nfrom .payments import payments_bp\n\ndef create_app():\n    app = Flask(__name__)\n    app.register_blueprint(reports_bp, url_prefix='/reports')\n    app.register_blueprint(payments_bp, url_prefix='/payments')\n    return app\nEOF\ncat > app/reports.py << 'EOF'\nfrom flask import Blueprint, jsonify\n\nreports_bp = Blueprint('reports', __name__)\n\n@reports_bp.route('/summary', methods=['GET'])\ndef get_summary():\n    return jsonify({'total': 100, 'breakdown': {}, 'generated_at': '2024-01-01'})\n\n@reports_bp.route('/export', methods=['GET'])\ndef export_report():\n    return jsonify({'url': 'https://...', 'expires_in': 3600})\nEOF\ncat > app/payments.py << 'EOF'\nfrom flask import Blueprint, jsonify, request\n\npayments_bp = Blueprint('payments', __name__)\n\n@payments_bp.route('/charge', methods=['POST'])\ndef charge():\n    return jsonify({'id': 'ch_123', 'status': 'success', 'amount': 100})\n\n@payments_bp.route('/<payment_id>/refund', methods=['POST'])\ndef refund(payment_id):\n    return jsonify({'id': payment_id, 'refunded': True})\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > app/__init__.py << 'EOF'\nfrom flask import Flask\nfrom .reports import reports_bp\nfrom .payments import payments_bp\n\ndef create_app():\n    app = Flask(__name__)\n    app.register_blueprint(reports_bp, url_prefix='/api/v2/reports')\n    app.register_blueprint(payments_bp, url_prefix='/payments')\n    return app\nEOF\ncat > app/reports.py << 'EOF'\nfrom flask import Blueprint, jsonify\n\nreports_bp = Blueprint('reports', __name__)\n\n@reports_bp.route('/summary', methods=['GET'])\ndef get_summary():\n    return jsonify({'total': 100, 'breakdown': {}})\n\n@reports_bp.route('/export', methods=['POST'])\ndef export_report():\n    return jsonify({'url': 'https://...', 'expires_in': 3600})\nEOF\ngit add . && git commit -m 'move reports to /api/v2, remove generated_at, change export to POST'",
+      "expected_output": "All reports endpoints change path: GET /reports/summary -> GET /api/v2/reports/summary (breaking), GET /reports/export -> POST /api/v2/reports/export (two breaks: path changed AND method changed from GET to POST). Response field 'generated_at' removed from GET /api/v2/reports/summary (breaking). Payments endpoints are unchanged. The skill must identify that the prefix change came from app/__init__.py registration, not from the route decorators.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "blueprint-prefix-traced-from-registration",
+          "text": "The report identifies that the path change originated from the url_prefix change in the blueprint registration (app/__init__.py), not from the route decorators"
+        },
+        {
+          "id": "reports-path-change-breaking",
+          "text": "The path change from /reports/* to /api/v2/reports/* is flagged as breaking for all report endpoints"
+        },
+        {
+          "id": "export-method-change-breaking",
+          "text": "GET /reports/export changing to POST /api/v2/reports/export is flagged as breaking — both the path AND the HTTP method changed"
+        },
+        {
+          "id": "generated-at-removal-breaking",
+          "text": "The removal of the 'generated_at' field from the GET /reports/summary response is flagged as a breaking change"
+        },
+        {
+          "id": "payments-unaffected",
+          "text": "The payments endpoints are correctly identified as unchanged and do not appear as breaking changes"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Are there breaking changes in this API?",
+      "description": "OpenAPI spec (YAML) where a shared component schema ($ref) is modified. The schema 'ErrorResponse' is used in error responses for multiple endpoints. A required field is added to it, and one endpoint's success response schema loses a field. A completely new endpoint is also added. The skill must follow $ref pointers to determine which endpoints are affected by shared schema changes.",
+      "setup": "mkdir -p /tmp/eval-rest-4 && cd /tmp/eval-rest-4 && git init && cat > openapi.yaml << 'EOF'\nopenapi: 3.0.0\ninfo:\n  title: Orders API\n  version: 1.0.0\ncomponents:\n  schemas:\n    ErrorResponse:\n      type: object\n      required: [code, message]\n      properties:\n        code:\n          type: string\n        message:\n          type: string\n    Order:\n      type: object\n      required: [id, status, total]\n      properties:\n        id:\n          type: string\n        status:\n          type: string\n        total:\n          type: number\n        created_at:\n          type: string\n          format: date-time\npaths:\n  /orders:\n    get:\n      summary: List orders\n      responses:\n        '200':\n          description: Success\n          content:\n            application/json:\n              schema:\n                type: array\n                items:\n                  $ref: '#/components/schemas/Order'\n        '400':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\n    post:\n      summary: Create order\n      responses:\n        '201':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Order'\n        '400':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\n  /orders/{id}:\n    get:\n      summary: Get order\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Order'\n        '404':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > openapi.yaml << 'EOF'\nopenapi: 3.0.0\ninfo:\n  title: Orders API\n  version: 2.0.0\ncomponents:\n  schemas:\n    ErrorResponse:\n      type: object\n      required: [code, message, request_id]\n      properties:\n        code:\n          type: string\n        message:\n          type: string\n        request_id:\n          type: string\n    Order:\n      type: object\n      required: [id, status, total]\n      properties:\n        id:\n          type: string\n        status:\n          type: string\n        total:\n          type: number\npaths:\n  /orders:\n    get:\n      summary: List orders\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                type: array\n                items:\n                  $ref: '#/components/schemas/Order'\n        '400':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\n    post:\n      summary: Create order\n      responses:\n        '201':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Order'\n        '400':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\n  /orders/{id}:\n    get:\n      summary: Get order\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Order'\n        '404':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/ErrorResponse'\n  /orders/{id}/cancel:\n    post:\n      summary: Cancel order\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Order'\nEOF\ngit add . && git commit -m 'add request_id to ErrorResponse, remove created_at from Order, add cancel endpoint'",
+      "expected_output": "ErrorResponse gains required field 'request_id' — this is breaking for ALL endpoints that return ErrorResponse (GET /orders, POST /orders, GET /orders/{id}), because clients parsing error responses will now receive an unexpected required field they may not handle. Order schema loses 'created_at' — this is breaking for GET /orders, POST /orders, GET /orders/{id} since all return Order. POST /orders/{id}/cancel is a new non-breaking endpoint. The skill must follow $ref pointers.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "error-response-change-cascades",
+          "text": "The addition of required 'request_id' to ErrorResponse is identified as affecting multiple endpoints (GET /orders, POST /orders, GET /orders/{id}) because they all reference ErrorResponse via $ref"
+        },
+        {
+          "id": "created-at-removal-breaking",
+          "text": "The removal of 'created_at' from the Order schema is flagged as a breaking change affecting endpoints that return Order objects"
+        },
+        {
+          "id": "cancel-endpoint-non-breaking",
+          "text": "POST /orders/{id}/cancel is listed as a non-breaking addition"
+        },
+        {
+          "id": "ref-resolution-shown",
+          "text": "The report demonstrates awareness of $ref resolution — it connects schema changes in components/schemas to the endpoints that use those schemas via $ref"
+        }
+      ]
+    }
+  ,
+    {
+      "id": 5,
+      "prompt": "Find breaking API changes in this Spring project",
+      "description": "Spring Boot app with a three-level path composition: a base controller class has @RequestMapping('/api/v1'), a child controller extends it with @RequestMapping('/users'), and individual methods have @GetMapping('/{id}') etc. The base class path changes from /api/v1 to /api/v2. The skill must trace the inheritance chain to know that the full path is base-class-prefix + controller-prefix + method-path.",
+      "setup": "mkdir -p /tmp/eval-rest-5/src/main/java/com/example/api && cd /tmp/eval-rest-5 && git init && cat > src/main/java/com/example/api/BaseApiController.java << 'EOF'\npackage com.example.api;\n\nimport org.springframework.web.bind.annotation.RequestMapping;\n\n@RequestMapping(\"/api/v1\")\npublic abstract class BaseApiController {\n    // shared base path for all versioned controllers\n}\nEOF\ncat > src/main/java/com/example/api/UsersController.java << 'EOF'\npackage com.example.api;\n\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/users\")\npublic class UsersController extends BaseApiController {\n\n    @GetMapping(\"\")\n    public List<User> listUsers() {\n        return userService.findAll();\n    }\n\n    @GetMapping(\"/{id}\")\n    public User getUser(@PathVariable Long id) {\n        return userService.findById(id);\n    }\n\n    @PostMapping(\"\")\n    public User createUser(@RequestBody CreateUserRequest req) {\n        return userService.create(req);\n    }\n\n    @DeleteMapping(\"/{id}\")\n    public void deleteUser(@PathVariable Long id) {\n        userService.delete(id);\n    }\n}\nEOF\ncat > src/main/java/com/example/api/OrdersController.java << 'EOF'\npackage com.example.api;\n\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/orders\")\npublic class OrdersController extends BaseApiController {\n\n    @GetMapping(\"\")\n    public List<Order> listOrders() {\n        return orderService.findAll();\n    }\n\n    @GetMapping(\"/{id}\")\n    public Order getOrder(@PathVariable Long id) {\n        return orderService.findById(id);\n    }\n\n    @PostMapping(\"\")\n    public Order createOrder(@RequestBody CreateOrderRequest req) {\n        return orderService.create(req);\n    }\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/api/BaseApiController.java << 'EOF'\npackage com.example.api;\n\nimport org.springframework.web.bind.annotation.RequestMapping;\n\n@RequestMapping(\"/api/v2\")\npublic abstract class BaseApiController {\n    // bumped to v2\n}\nEOF\ngit add . && git commit -m 'bump base path from /api/v1 to /api/v2'",
+      "expected_output": "ALL endpoints in both UsersController and OrdersController are breaking path changes because the base class @RequestMapping changed from /api/v1 to /api/v2. Full paths change from /api/v1/users/* to /api/v2/users/* and from /api/v1/orders/* to /api/v2/orders/*. The skill must trace the inheritance chain: UsersController extends BaseApiController, BaseApiController has @RequestMapping('/api/v1'). The report should attribute the root cause to BaseApiController.java, not just list each endpoint independently.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "base-class-path-change-identified",
+          "text": "The change to @RequestMapping in BaseApiController (from /api/v1 to /api/v2) is identified as the root cause affecting all controllers that extend it"
+        },
+        {
+          "id": "users-endpoints-all-breaking",
+          "text": "All UsersController endpoints are flagged as breaking path changes (/api/v1/users/* → /api/v2/users/*)"
+        },
+        {
+          "id": "orders-endpoints-all-breaking",
+          "text": "All OrdersController endpoints are flagged as breaking path changes (/api/v1/orders/* → /api/v2/orders/*)"
+        },
+        {
+          "id": "inheritance-chain-traced",
+          "text": "The report identifies that full paths were computed by combining the base class prefix with the controller-level and method-level mappings (i.e. it read BaseApiController.java, not just the child controllers)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Check for breaking API changes",
+      "description": "Spring Boot app where auth rules live entirely in a separate SecurityConfig.java (WebSecurityConfigurerAdapter). The controller files do not change at all — only SecurityConfig changes. An endpoint that was previously open (permitAll) now requires ADMIN role. A second endpoint that required USER role is now open. The skill must read the security config to determine auth requirements; the breaking change is invisible if you only look at controller annotations.",
+      "setup": "mkdir -p /tmp/eval-rest-6/src/main/java/com/example && cd /tmp/eval-rest-6 && git init && cat > src/main/java/com/example/ProductController.java << 'EOF'\npackage com.example;\n\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/api/products\")\npublic class ProductController {\n\n    @GetMapping(\"\")\n    public List<Product> listProducts() {\n        return productService.findAll();\n    }\n\n    @PostMapping(\"\")\n    public Product createProduct(@RequestBody CreateProductRequest req) {\n        return productService.create(req);\n    }\n\n    @DeleteMapping(\"/{id}\")\n    public void deleteProduct(@PathVariable Long id) {\n        productService.delete(id);\n    }\n\n    @GetMapping(\"/internal/stats\")\n    public ProductStats getStats() {\n        return productService.getStats();\n    }\n}\nEOF\ncat > src/main/java/com/example/SecurityConfig.java << 'EOF'\npackage com.example;\n\nimport org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;\nimport org.springframework.security.config.annotation.web.builders.HttpSecurity;\n\n@Configuration\n@EnableWebSecurity\npublic class SecurityConfig extends WebSecurityConfigurerAdapter {\n\n    @Override\n    protected void configure(HttpSecurity http) throws Exception {\n        http.authorizeRequests()\n            .antMatchers(\"GET\", \"/api/products\").permitAll()\n            .antMatchers(\"POST\", \"/api/products\").hasRole(\"USER\")\n            .antMatchers(\"DELETE\", \"/api/products/**\").hasRole(\"ADMIN\")\n            .antMatchers(\"/api/products/internal/**\").hasRole(\"USER\")\n            .anyRequest().authenticated();\n    }\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/SecurityConfig.java << 'EOF'\npackage com.example;\n\nimport org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;\nimport org.springframework.security.config.annotation.web.builders.HttpSecurity;\n\n@Configuration\n@EnableWebSecurity\npublic class SecurityConfig extends WebSecurityConfigurerAdapter {\n\n    @Override\n    protected void configure(HttpSecurity http) throws Exception {\n        http.authorizeRequests()\n            .antMatchers(\"GET\", \"/api/products\").permitAll()\n            .antMatchers(\"POST\", \"/api/products\").hasRole(\"ADMIN\")\n            .antMatchers(\"DELETE\", \"/api/products/**\").hasRole(\"ADMIN\")\n            .antMatchers(\"/api/products/internal/**\").permitAll()\n            .anyRequest().authenticated();\n    }\n}\nEOF\ngit add . && git commit -m 'tighten POST products to ADMIN; open internal stats endpoint'",
+      "expected_output": "POST /api/products is a breaking auth change: was USER, now requires ADMIN (clients with USER role will get 403). GET /api/products/internal/stats is a breaking auth change in reverse direction: was USER-only, now permitAll — this opens a previously restricted endpoint which may be a security concern but is non-breaking for existing clients. Controller files unchanged. The skill must trace auth rules from SecurityConfig.java and match them to endpoints in ProductController.java.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "post-products-auth-breaking",
+          "text": "POST /api/products is flagged as a breaking auth change — the required role escalated from USER to ADMIN, so existing USER clients will get 403"
+        },
+        {
+          "id": "internal-stats-auth-loosened",
+          "text": "GET /api/products/internal/stats is noted as an auth change — the endpoint changed from USER-required to open (permitAll)"
+        },
+        {
+          "id": "security-config-traced",
+          "text": "The report attributes the auth changes to SecurityConfig.java, not to controller annotations (the controller was not modified)"
+        },
+        {
+          "id": "list-and-delete-unchanged",
+          "text": "GET /api/products (list) and DELETE /api/products/{id} are correctly identified as unchanged"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "What breaking changes are there in this API?",
+      "description": "Spring Boot app where all controllers wrap their responses in a generic ApiResponse<T> class. A field is removed from ApiResponse<T> itself (requestId), which cascades to every endpoint across multiple controllers. Additionally, a new required constraint (@NotNull) is added to a field in CreateOrderRequest, making that POST endpoint breaking for clients that omit the field.",
+      "setup": "mkdir -p /tmp/eval-rest-7/src/main/java/com/example && cd /tmp/eval-rest-7 && git init && cat > src/main/java/com/example/ApiResponse.java << 'EOF'\npackage com.example;\n\npublic class ApiResponse<T> {\n    private T data;\n    private String requestId;\n    private long timestamp;\n    private boolean success;\n\n    public ApiResponse(T data, String requestId) {\n        this.data = data;\n        this.requestId = requestId;\n        this.timestamp = System.currentTimeMillis();\n        this.success = true;\n    }\n\n    // getters omitted for brevity\n}\nEOF\ncat > src/main/java/com/example/UserController.java << 'EOF'\npackage com.example;\n\nimport org.springframework.web.bind.annotation.*;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/api/users\")\npublic class UserController {\n\n    @GetMapping(\"/{id}\")\n    public ApiResponse<User> getUser(@PathVariable Long id) {\n        return new ApiResponse<>(userService.findById(id), generateRequestId());\n    }\n\n    @GetMapping(\"\")\n    public ApiResponse<List<User>> listUsers() {\n        return new ApiResponse<>(userService.findAll(), generateRequestId());\n    }\n}\nEOF\ncat > src/main/java/com/example/OrderController.java << 'EOF'\npackage com.example;\n\nimport org.springframework.web.bind.annotation.*;\nimport javax.validation.Valid;\n\n@RestController\n@RequestMapping(\"/api/orders\")\npublic class OrderController {\n\n    @GetMapping(\"/{id}\")\n    public ApiResponse<Order> getOrder(@PathVariable Long id) {\n        return new ApiResponse<>(orderService.findById(id), generateRequestId());\n    }\n\n    @PostMapping(\"\")\n    public ApiResponse<Order> createOrder(@Valid @RequestBody CreateOrderRequest req) {\n        return new ApiResponse<>(orderService.create(req), generateRequestId());\n    }\n}\nEOF\ncat > src/main/java/com/example/CreateOrderRequest.java << 'EOF'\npackage com.example;\n\npublic class CreateOrderRequest {\n    private String customerId;\n    private String productId;\n    private int quantity;\n    // getters/setters omitted\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/ApiResponse.java << 'EOF'\npackage com.example;\n\npublic class ApiResponse<T> {\n    private T data;\n    private long timestamp;\n    private boolean success;\n\n    public ApiResponse(T data) {\n        this.data = data;\n        this.timestamp = System.currentTimeMillis();\n        this.success = true;\n    }\n\n    // getters omitted for brevity\n}\nEOF\ncat > src/main/java/com/example/CreateOrderRequest.java << 'EOF'\npackage com.example;\n\nimport javax.validation.constraints.NotNull;\n\npublic class CreateOrderRequest {\n    @NotNull\n    private String customerId;\n    private String productId;\n    private int quantity;\n    // getters/setters omitted\n}\nEOF\ngit add . && git commit -m 'remove requestId from ApiResponse; add @NotNull to customerId in CreateOrderRequest'",
+      "expected_output": "requestId removed from ApiResponse<T> is a breaking response change that cascades to ALL four endpoints: GET /api/users/{id}, GET /api/users, GET /api/orders/{id}, POST /api/orders. The skill must recognize that ApiResponse<T> is a generic wrapper used by all controllers and trace the cascade. Additionally, @NotNull added to customerId in CreateOrderRequest is breaking for POST /api/orders — clients that omit customerId will now get a 400 validation error.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "request-id-removal-all-endpoints",
+          "text": "The removal of requestId from ApiResponse<T> is flagged as breaking and identified as affecting all four endpoints across both controllers (GET /api/users/{id}, GET /api/users, GET /api/orders/{id}, POST /api/orders)"
+        },
+        {
+          "id": "generic-wrapper-cascade-identified",
+          "text": "The report identifies that the breaking change originates from the shared generic wrapper class ApiResponse.java and cascades to all endpoints that use it, rather than listing each endpoint as an independent change"
+        },
+        {
+          "id": "not-null-constraint-breaking",
+          "text": "The addition of @NotNull to customerId in CreateOrderRequest is flagged as a breaking change for POST /api/orders"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Find breaking changes in this API",
+      "description": "Spring Boot app where breaking changes are expressed entirely through Bean Validation constraint annotations on a DTO — no route or method signatures change. @NotNull and @Email are added to fields that previously had no constraints. @Size min increases. These manifest as HTTP 400 errors for previously-valid client payloads. The skill must recognize that constraint annotation changes are API-breaking changes.",
+      "setup": "mkdir -p /tmp/eval-rest-8/src/main/java/com/example && cd /tmp/eval-rest-8 && git init && cat > src/main/java/com/example/RegisterRequest.java << 'EOF'\npackage com.example;\n\nimport javax.validation.constraints.Size;\n\npublic class RegisterRequest {\n    @Size(min = 2, max = 30)\n    private String username;\n\n    private String email;\n\n    @Size(min = 6)\n    private String password;\n\n    private String displayName;\n    // getters/setters omitted\n}\nEOF\ncat > src/main/java/com/example/UpdateProfileRequest.java << 'EOF'\npackage com.example;\n\npublic class UpdateProfileRequest {\n    private String displayName;\n    private String bio;\n    private String website;\n    // getters/setters omitted\n}\nEOF\ncat > src/main/java/com/example/UserController.java << 'EOF'\npackage com.example;\n\nimport org.springframework.web.bind.annotation.*;\nimport javax.validation.Valid;\n\n@RestController\n@RequestMapping(\"/api/users\")\npublic class UserController {\n\n    @PostMapping(\"/register\")\n    public User register(@Valid @RequestBody RegisterRequest req) {\n        return userService.register(req);\n    }\n\n    @PutMapping(\"/{id}/profile\")\n    public User updateProfile(@PathVariable Long id,\n                              @Valid @RequestBody UpdateProfileRequest req) {\n        return userService.updateProfile(id, req);\n    }\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/RegisterRequest.java << 'EOF'\npackage com.example;\n\nimport javax.validation.constraints.*;\n\npublic class RegisterRequest {\n    @NotBlank\n    @Size(min = 5, max = 30)\n    private String username;\n\n    @NotNull\n    @Email\n    private String email;\n\n    @NotBlank\n    @Size(min = 8)\n    private String password;\n\n    private String displayName;\n    // getters/setters omitted\n}\nEOF\ncat > src/main/java/com/example/UpdateProfileRequest.java << 'EOF'\npackage com.example;\n\nimport javax.validation.constraints.Size;\n\npublic class UpdateProfileRequest {\n    @Size(max = 50)\n    private String displayName;\n    @Size(max = 200)\n    private String bio;\n    @Size(max = 100)\n    private String website;\n    // getters/setters omitted\n}\nEOF\ngit add . && git commit -m 'tighten validation: email required, min username length 5, min password 8'",
+      "expected_output": "POST /api/users/register has multiple breaking constraint changes: email is now @NotNull (clients that omit email will get 400 — previously valid), username @Size min increased from 2 to 5 (clients sending 2-4 char usernames now get 400), password @Size min increased from 6 to 8 (clients sending 6-7 char passwords now get 400). PUT /api/users/{id}/profile changes are non-breaking (only @Size max added, which is more permissive or same). The skill must recognize that tightening validation constraints is an API-breaking change.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "email-not-null-breaking",
+          "text": "The addition of @NotNull/@Email to email in RegisterRequest is flagged as breaking for POST /api/users/register — clients not sending email will now receive 400"
+        },
+        {
+          "id": "username-min-size-breaking",
+          "text": "The increase of @Size min on username from 2 to 5 is flagged as breaking — previously valid 2-4 character usernames are now rejected"
+        },
+        {
+          "id": "password-min-size-breaking",
+          "text": "The increase of @Size min on password from 6 to 8 is flagged as breaking — previously valid 6-7 character passwords are now rejected"
+        },
+        {
+          "id": "update-profile-non-breaking",
+          "text": "The changes to UpdateProfileRequest (adding @Size max constraints) are correctly identified as non-breaking additions"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Are there breaking API changes in this project?",
+      "description": "Spring Boot app where a @ControllerAdvice GlobalExceptionHandler handles all validation errors and not-found errors across every endpoint. The error response format changes entirely (different field names and structure) in the exception handler. No controller files change. The skill must recognize that @ControllerAdvice changes affect the error contract of all endpoints, even though no route files were touched.",
+      "setup": "mkdir -p /tmp/eval-rest-9/src/main/java/com/example && cd /tmp/eval-rest-9 && git init && cat > src/main/java/com/example/GlobalExceptionHandler.java << 'EOF'\npackage com.example;\n\nimport org.springframework.http.HttpStatus;\nimport org.springframework.http.ResponseEntity;\nimport org.springframework.web.bind.MethodArgumentNotValidException;\nimport org.springframework.web.bind.annotation.ControllerAdvice;\nimport org.springframework.web.bind.annotation.ExceptionHandler;\n\nimport java.util.List;\nimport java.util.stream.Collectors;\n\n@ControllerAdvice\npublic class GlobalExceptionHandler {\n\n    @ExceptionHandler(MethodArgumentNotValidException.class)\n    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {\n        List<String> errors = ex.getBindingResult().getFieldErrors()\n            .stream()\n            .map(fe -> fe.getField() + \": \" + fe.getDefaultMessage())\n            .collect(Collectors.toList());\n        return ResponseEntity.badRequest().body(new ErrorBody(errors));\n    }\n\n    @ExceptionHandler(ResourceNotFoundException.class)\n    public ResponseEntity<?> handleNotFound(ResourceNotFoundException ex) {\n        return ResponseEntity.status(HttpStatus.NOT_FOUND)\n            .body(new ErrorBody(List.of(ex.getMessage())));\n    }\n\n    static class ErrorBody {\n        public final List<String> errors;\n        ErrorBody(List<String> errors) { this.errors = errors; }\n    }\n}\nEOF\ncat > src/main/java/com/example/ItemController.java << 'EOF'\npackage com.example;\n\nimport org.springframework.web.bind.annotation.*;\nimport javax.validation.Valid;\nimport java.util.List;\n\n@RestController\n@RequestMapping(\"/api/items\")\npublic class ItemController {\n\n    @GetMapping(\"/{id}\")\n    public Item getItem(@PathVariable Long id) {\n        return itemService.findById(id);\n    }\n\n    @PostMapping(\"\")\n    public Item createItem(@Valid @RequestBody CreateItemRequest req) {\n        return itemService.create(req);\n    }\n\n    @PutMapping(\"/{id}\")\n    public Item updateItem(@PathVariable Long id, @Valid @RequestBody UpdateItemRequest req) {\n        return itemService.update(id, req);\n    }\n\n    @DeleteMapping(\"/{id}\")\n    public void deleteItem(@PathVariable Long id) {\n        itemService.delete(id);\n    }\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/GlobalExceptionHandler.java << 'EOF'\npackage com.example;\n\nimport org.springframework.http.HttpStatus;\nimport org.springframework.http.ResponseEntity;\nimport org.springframework.web.bind.MethodArgumentNotValidException;\nimport org.springframework.web.bind.annotation.ControllerAdvice;\nimport org.springframework.web.bind.annotation.ExceptionHandler;\n\nimport java.time.Instant;\nimport java.util.List;\nimport java.util.stream.Collectors;\n\n@ControllerAdvice\npublic class GlobalExceptionHandler {\n\n    @ExceptionHandler(MethodArgumentNotValidException.class)\n    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {\n        List<Violation> violations = ex.getBindingResult().getFieldErrors()\n            .stream()\n            .map(fe -> new Violation(fe.getField(), fe.getDefaultMessage()))\n            .collect(Collectors.toList());\n        return ResponseEntity.badRequest().body(new ErrorBody(\"VALIDATION_FAILED\", violations));\n    }\n\n    @ExceptionHandler(ResourceNotFoundException.class)\n    public ResponseEntity<?> handleNotFound(ResourceNotFoundException ex) {\n        return ResponseEntity.status(HttpStatus.NOT_FOUND)\n            .body(new ErrorBody(\"NOT_FOUND\", List.of()));\n    }\n\n    static class Violation {\n        public final String field;\n        public final String message;\n        Violation(String field, String message) {\n            this.field = field;\n            this.message = message;\n        }\n    }\n\n    static class ErrorBody {\n        public final String code;\n        public final List<Violation> violations;\n        public final String timestamp;\n        ErrorBody(String code, List<Violation> violations) {\n            this.code = code;\n            this.violations = violations;\n            this.timestamp = Instant.now().toString();\n        }\n    }\n}\nEOF\ngit add . && git commit -m 'restructure error response: replace errors[] with violations[{field,message}] + code + timestamp'",
+      "expected_output": "The error response format changed in GlobalExceptionHandler.java (a @ControllerAdvice that handles errors for all endpoints). Old format: {errors: [\"field: message\"]}. New format: {code: string, violations: [{field, message}], timestamp: string}. This is a breaking change affecting ALL endpoints that return validation errors (POST /api/items, PUT /api/items/{id}) because clients parsing the 400 response body will break. Also affects all endpoints returning 404 (GET /api/items/{id}, DELETE /api/items/{id}) since the not-found error format changed. ItemController was not modified.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "error-format-change-breaking",
+          "text": "The change to the error response format in GlobalExceptionHandler is flagged as a breaking change — the errors[] array format was replaced by violations[{field,message}] with a code field"
+        },
+        {
+          "id": "validation-endpoints-affected",
+          "text": "POST /api/items and PUT /api/items/{id} are identified as affected by the validation error format change (they accept @Valid request bodies)"
+        },
+        {
+          "id": "not-found-endpoints-affected",
+          "text": "GET /api/items/{id} and DELETE /api/items/{id} are identified as affected by the not-found error format change"
+        },
+        {
+          "id": "controller-advice-scope-identified",
+          "text": "The report identifies that the change originates from @ControllerAdvice (GlobalExceptionHandler.java) and that this affects all endpoints, not just one — the controller file itself was not modified"
+        }
+      ]
+    }
+  ,
+    {
+      "id": 10,
+      "prompt": "Find breaking API changes in this project",
+      "description": "FastAPI app where a shared Pydantic response model (ProductResponse) loses a field. Two router files that use ProductResponse as response_model are NOT changed — they don't appear in the git diff at all. The skill must proactively search for usages of the changed schema in unchanged files to identify which endpoints are affected. Baseline only sees the schema file in the diff.",
+      "setup": "mkdir -p /tmp/eval-rest-10/app/routers && cd /tmp/eval-rest-10 && git init && cat > app/schemas.py << 'EOF'\nfrom pydantic import BaseModel\nfrom typing import Optional\n\nclass ProductResponse(BaseModel):\n    id: str\n    name: str\n    price: float\n    cost_price: float\n    stock: int\n    sku: Optional[str] = None\n\nclass CreateProductRequest(BaseModel):\n    name: str\n    price: float\n    cost_price: float\n    sku: Optional[str] = None\nEOF\ncat > app/routers/products.py << 'EOF'\nfrom fastapi import APIRouter\nfrom typing import List\nfrom ..schemas import ProductResponse, CreateProductRequest\n\nrouter = APIRouter()\n\n@router.get('/', response_model=List[ProductResponse])\ndef list_products():\n    return []\n\n@router.get('/{product_id}', response_model=ProductResponse)\ndef get_product(product_id: str):\n    return {}\n\n@router.post('/', response_model=ProductResponse)\ndef create_product(req: CreateProductRequest):\n    return {}\nEOF\ncat > app/routers/catalog.py << 'EOF'\nfrom fastapi import APIRouter\nfrom typing import List\nfrom ..schemas import ProductResponse\n\nrouter = APIRouter()\n\n@router.get('/featured', response_model=List[ProductResponse])\ndef get_featured():\n    return []\n\n@router.get('/new-arrivals', response_model=List[ProductResponse])\ndef get_new_arrivals():\n    return []\nEOF\ncat > app/main.py << 'EOF'\nfrom fastapi import FastAPI\nfrom .routers import products, catalog\n\napp = FastAPI()\napp.include_router(products.router, prefix='/api/products', tags=['products'])\napp.include_router(catalog.router, prefix='/api/catalog', tags=['catalog'])\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > app/schemas.py << 'EOF'\nfrom pydantic import BaseModel\nfrom typing import Optional\n\nclass ProductResponse(BaseModel):\n    id: str\n    name: str\n    price: float\n    stock: int\n    sku: Optional[str] = None\n\nclass CreateProductRequest(BaseModel):\n    name: str\n    price: float\n    sku: Optional[str] = None\nEOF\ngit add . && git commit -m 'remove cost_price from ProductResponse and CreateProductRequest (internal field, should not be exposed)'",
+      "expected_output": "cost_price removed from ProductResponse is a breaking response change affecting ALL endpoints that return ProductResponse: GET /api/products, GET /api/products/{product_id}, POST /api/products (from routers/products.py) AND GET /api/catalog/featured, GET /api/catalog/new-arrivals (from routers/catalog.py). cost_price removed from CreateProductRequest is a breaking request change for POST /api/products. The router files were NOT in the diff — the skill must grep for ProductResponse/CreateProductRequest usages to find the affected endpoints.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "cost-price-response-removal-breaking",
+          "text": "The removal of cost_price from ProductResponse is flagged as a breaking response change"
+        },
+        {
+          "id": "products-router-endpoints-identified",
+          "text": "GET /api/products, GET /api/products/{product_id}, and POST /api/products are all identified as affected (from routers/products.py which was NOT in the diff)"
+        },
+        {
+          "id": "catalog-router-endpoints-identified",
+          "text": "GET /api/catalog/featured and GET /api/catalog/new-arrivals are identified as affected (from routers/catalog.py which was NOT in the diff)"
+        },
+        {
+          "id": "unchanged-router-files-noted",
+          "text": "The report identifies that the router files (products.py, catalog.py) were not modified but are affected because they use ProductResponse as response_model — the skill traced usages in unchanged files"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Are there breaking API changes?",
+      "description": "Spring Boot app where a @RequestBody DTO gains a required field. Two controller files that accept this DTO as @RequestBody are NOT changed and do not appear in the git diff. The skill must grep for usages of the changed DTO class in unchanged controller files to identify which POST endpoints now require the new field.",
+      "setup": "mkdir -p /tmp/eval-rest-11/src/main/java/com/example/dto /tmp/eval-rest-11/src/main/java/com/example/controller && cd /tmp/eval-rest-11 && git init && cat > src/main/java/com/example/dto/CreateOrderRequest.java << 'EOF'\npackage com.example.dto;\n\npublic class CreateOrderRequest {\n    private String customerId;\n    private String productId;\n    private int quantity;\n    private String shippingAddress;\n    // getters/setters omitted\n}\nEOF\ncat > src/main/java/com/example/controller/OrderController.java << 'EOF'\npackage com.example.controller;\n\nimport com.example.dto.CreateOrderRequest;\nimport org.springframework.web.bind.annotation.*;\nimport javax.validation.Valid;\n\n@RestController\n@RequestMapping(\"/api/orders\")\npublic class OrderController {\n\n    @PostMapping\n    public Order createOrder(@Valid @RequestBody CreateOrderRequest req) {\n        return orderService.create(req);\n    }\n\n    @GetMapping(\"/{id}\")\n    public Order getOrder(@PathVariable Long id) {\n        return orderService.findById(id);\n    }\n}\nEOF\ncat > src/main/java/com/example/controller/AdminOrderController.java << 'EOF'\npackage com.example.controller;\n\nimport com.example.dto.CreateOrderRequest;\nimport org.springframework.web.bind.annotation.*;\nimport javax.validation.Valid;\n\n@RestController\n@RequestMapping(\"/api/admin/orders\")\npublic class AdminOrderController {\n\n    @PostMapping\n    public Order adminCreateOrder(@Valid @RequestBody CreateOrderRequest req) {\n        return orderService.adminCreate(req);\n    }\n\n    @GetMapping\n    public List<Order> listAllOrders() {\n        return orderService.findAll();\n    }\n}\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > src/main/java/com/example/dto/CreateOrderRequest.java << 'EOF'\npackage com.example.dto;\n\nimport javax.validation.constraints.NotBlank;\n\npublic class CreateOrderRequest {\n    private String customerId;\n    private String productId;\n    private int quantity;\n    private String shippingAddress;\n    @NotBlank\n    private String sourceChannel;\n    // getters/setters omitted\n}\nEOF\ngit add . && git commit -m 'add required sourceChannel field to CreateOrderRequest for analytics tracking'",
+      "expected_output": "sourceChannel added as required (@NotBlank) to CreateOrderRequest is a breaking change for POST /api/orders (OrderController) AND POST /api/admin/orders (AdminOrderController). Both controllers accept CreateOrderRequest as @RequestBody with @Valid. Neither controller file changed — only CreateOrderRequest.java is in the diff. The skill must grep for CreateOrderRequest usages in the controller files to find both affected endpoints.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "source-channel-required-breaking",
+          "text": "The addition of required field sourceChannel (@NotBlank) to CreateOrderRequest is flagged as a breaking change — clients not sending it will receive 400"
+        },
+        {
+          "id": "order-controller-endpoint-identified",
+          "text": "POST /api/orders from OrderController is identified as affected (OrderController.java was NOT in the diff)"
+        },
+        {
+          "id": "admin-order-controller-endpoint-identified",
+          "text": "POST /api/admin/orders from AdminOrderController is identified as affected (AdminOrderController.java was NOT in the diff)"
+        },
+        {
+          "id": "dto-only-in-diff",
+          "text": "The report correctly notes that only CreateOrderRequest.java was modified and that the controller files were unchanged — the breaking change was discovered by tracing DTO usage in unchanged files"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Check this repo for breaking API changes",
+      "description": "Flask app where a shared marshmallow Schema (UserSchema) loses a field. Three blueprint view files that use UserSchema to serialize responses are NOT in the diff. The skill must search for UserSchema usages in the blueprint files to enumerate all affected endpoints. Additionally a second schema (TokenSchema) gains a required field, affecting an auth endpoint whose file is also unchanged.",
+      "setup": "mkdir -p /tmp/eval-rest-12/app/blueprints && cd /tmp/eval-rest-12 && git init && cat > app/schemas.py << 'EOF'\nfrom marshmallow import Schema, fields\n\nclass UserSchema(Schema):\n    id = fields.Int(dump_only=True)\n    username = fields.Str(required=True)\n    email = fields.Email(required=True)\n    display_name = fields.Str()\n    phone = fields.Str()\n\nclass TokenSchema(Schema):\n    access_token = fields.Str(required=True)\n    token_type = fields.Str(required=True)\n    expires_in = fields.Int(required=True)\nEOF\ncat > app/blueprints/users.py << 'EOF'\nfrom flask import Blueprint, jsonify\nfrom ..schemas import UserSchema\n\nusers_bp = Blueprint('users', __name__)\nuser_schema = UserSchema()\nusers_schema = UserSchema(many=True)\n\n@users_bp.route('/', methods=['GET'])\ndef list_users():\n    return jsonify(users_schema.dump([]))\n\n@users_bp.route('/<int:user_id>', methods=['GET'])\ndef get_user(user_id):\n    return jsonify(user_schema.dump({}))\n\n@users_bp.route('/', methods=['POST'])\ndef create_user():\n    return jsonify(user_schema.dump({}))\nEOF\ncat > app/blueprints/profile.py << 'EOF'\nfrom flask import Blueprint, jsonify\nfrom ..schemas import UserSchema\n\nprofile_bp = Blueprint('profile', __name__)\nuser_schema = UserSchema()\n\n@profile_bp.route('/me', methods=['GET'])\ndef get_my_profile():\n    return jsonify(user_schema.dump({}))\n\n@profile_bp.route('/me', methods=['PUT'])\ndef update_profile():\n    return jsonify(user_schema.dump({}))\nEOF\ncat > app/blueprints/auth.py << 'EOF'\nfrom flask import Blueprint, jsonify\nfrom ..schemas import TokenSchema\n\nauth_bp = Blueprint('auth', __name__)\ntoken_schema = TokenSchema()\n\n@auth_bp.route('/login', methods=['POST'])\ndef login():\n    return jsonify(token_schema.dump({}))\n\n@auth_bp.route('/refresh', methods=['POST'])\ndef refresh_token():\n    return jsonify(token_schema.dump({}))\nEOF\ncat > app/__init__.py << 'EOF'\nfrom flask import Flask\nfrom .blueprints.users import users_bp\nfrom .blueprints.profile import profile_bp\nfrom .blueprints.auth import auth_bp\n\ndef create_app():\n    app = Flask(__name__)\n    app.register_blueprint(users_bp, url_prefix='/api/users')\n    app.register_blueprint(profile_bp, url_prefix='/api/profile')\n    app.register_blueprint(auth_bp, url_prefix='/api/auth')\n    return app\nEOF\ngit add . && git commit -m 'v1.0.0' && git tag v1.0.0\ncat > app/schemas.py << 'EOF'\nfrom marshmallow import Schema, fields\n\nclass UserSchema(Schema):\n    id = fields.Int(dump_only=True)\n    username = fields.Str(required=True)\n    email = fields.Email(required=True)\n    display_name = fields.Str()\n\nclass TokenSchema(Schema):\n    access_token = fields.Str(required=True)\n    token_type = fields.Str(required=True)\n    expires_in = fields.Int(required=True)\n    refresh_token = fields.Str(required=True)\nEOF\ngit add . && git commit -m 'remove phone from UserSchema; add required refresh_token to TokenSchema'",
+      "expected_output": "phone removed from UserSchema is breaking for ALL endpoints that return UserSchema: GET /api/users, GET /api/users/{user_id}, POST /api/users (from users.py — NOT in diff) and GET /api/profile/me, PUT /api/profile/me (from profile.py — NOT in diff). refresh_token added as required to TokenSchema is breaking for POST /api/auth/login and POST /api/auth/refresh (from auth.py — NOT in diff). Only schemas.py is in the diff. The skill must search for UserSchema and TokenSchema usages in blueprint files to enumerate all 7 affected endpoints.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "phone-removal-breaking",
+          "text": "The removal of phone from UserSchema is flagged as a breaking response change"
+        },
+        {
+          "id": "users-blueprint-endpoints-identified",
+          "text": "GET /api/users, GET /api/users/{user_id}, and POST /api/users from users.py are identified as affected by the UserSchema change (users.py was NOT in the diff)"
+        },
+        {
+          "id": "profile-blueprint-endpoints-identified",
+          "text": "GET /api/profile/me and PUT /api/profile/me from profile.py are identified as affected by the UserSchema change (profile.py was NOT in the diff)"
+        },
+        {
+          "id": "token-schema-auth-endpoints-identified",
+          "text": "POST /api/auth/login and POST /api/auth/refresh are identified as affected by the required refresh_token addition to TokenSchema (auth.py was NOT in the diff)"
+        }
+      ]
+    }
+  ]
+}

@@ -22,6 +22,7 @@ Skills are copied to `~/.claude/skills/` and `~/.copilot/skills/` and become ava
 | [`document-project`](skills/document-project/SKILL.md) | Create a root `README.md` and `/docs` pages for a project     |
 | [`find-dead-code`](skills/find-dead-code/SKILL.md)     | Find unused functions, classes, imports, and variables        |
 | [`improve-logging`](skills/improve-logging/SKILL.md)   | Audit log quality and produce prioritised fix recommendations |
+| [`find-breaking-rest-api`](skills/find-breaking-rest-api/SKILL.md) | Detect breaking changes in REST APIs by comparing git history         |
 
 ## Documentation
 

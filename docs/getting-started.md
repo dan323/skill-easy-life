@@ -47,6 +47,7 @@ Skills trigger automatically when Claude recognises a matching request — you d
 | "Document this project" | `document-project` |
 | "Find dead code" | `find-dead-code` |
 | "Review our logging" | `improve-logging` |
+| "Find breaking API changes" | `find-breaking-rest-api` |
 
 Each skill produces output in your current working directory (report files, updated `CHANGELOG.md`, new `README.md`, etc.).
 
