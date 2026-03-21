@@ -1,0 +1,35 @@
+{
+  "skill_name": "multi-repo-tasks",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run today's task from agent-tasks.yml.",
+      "expected_output": "Skill reads config and state, picks the first uncompleted task, forks/syncs the repo, spawns an agent to implement it, opens a PR, updates agent-tasks-state.yml, and prints a summary with progress and next-up.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Run agent-tasks — no state file yet, this is the first day.",
+      "expected_output": "Skill detects no state file, treats all tasks as pending, picks the very first task in the config, completes it, creates agent-tasks-state.yml with that entry.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Do the next repo task. The repo isn't forked yet.",
+      "expected_output": "Skill forks the repo, clones it, branches, spawns agent, opens PR, records in state.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Run agent-tasks.yml. All tasks are already in the state file.",
+      "expected_output": "Skill detects all tasks are completed and tells the user — nothing left to do.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Process the next item in my agent-tasks queue. Show me what's left after.",
+      "expected_output": "Skill completes one task and prints a progress line (e.g. '3 of 7 tasks completed') plus a 'Next up' line showing the following pending task.",
+      "files": []
+    }
+  ]
+}

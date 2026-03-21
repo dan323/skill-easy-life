@@ -4,21 +4,26 @@
 
 ## Setup
 
-No build step required. Clone the repo, make changes, and re-run the installer to test locally:
+No build step required. Clone the repo and install the marketplace to test locally:
 
 ```bash
-git clone https://github.com/your-org/agent-skills.git
+git clone https://github.com/dan323/agent-skills.git
 cd agent-skills
-./scripts/install.sh
 ```
+
+Then in Claude Code: `/plugin marketplace add ./`
 
 ## Adding a New Skill
 
-### 1. Create the skill directory
+### 1. Create the plugin directory
 
 ```
-skills/<your-skill-name>/
-├── SKILL.md
+plugins/<your-skill-name>/
+├── .claude-plugin/
+│   └── plugin.json
+├── skills/
+│   └── <your-skill-name>/
+│       └── SKILL.md
 └── evals/
     └── evals.json
 ```
@@ -91,9 +96,7 @@ Good assertions are:
 
 ### 4. Install and test manually
 
-```bash
-./scripts/install.sh
-```
+In Claude Code: `/plugin marketplace add ./` (from the repo root), then `/plugin install <your-skill-name>@agent-skills`.
 
 Open a Claude Code session in a suitable test directory and run your trigger phrase. Iterate on the `SKILL.md` until the output matches your expectations, then run the evals with the `skill-creator` skill for a more rigorous check.
 
@@ -105,8 +108,8 @@ Open a Claude Code session in a suitable test directory and run your trigger phr
 
 ## Improving an Existing Skill
 
-1. Edit the relevant `SKILL.md` and/or `evals/evals.json`
-2. Re-run `./scripts/install.sh`
+1. Edit the relevant `plugins/<name>/skills/<name>/SKILL.md` and/or `evals/evals.json`
+2. `/plugin update <name>@agent-skills` in Claude Code
 3. Test the change manually, then run evals
 4. Add a `### Changed` entry to `CHANGELOG.md`
 

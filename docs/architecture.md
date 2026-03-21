@@ -8,22 +8,22 @@ agent-skills is a content repository — there is no compiled code, no runtime, 
 
 ```
 agent-skills/
-├── scripts/
-│   ├── install.sh           Unix installer
-│   └── install.ps1          Windows installer
+├── .claude-plugin/
+│   └── marketplace.json     Marketplace catalog (lists all plugins)
+├── plugins/
+│   ├── changelog/
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json  Plugin manifest (name, version, description)
+│   │   ├── skills/
+│   │   │   └── changelog/
+│   │   │       └── SKILL.md Required — instructions the agent follows
+│   │   └── evals/
+│   │       └── evals.json   Optional — test cases for the skill
+│   └── <other-plugins>/     (same layout)
 ├── docs/
 │   ├── getting-started.md
 │   ├── architecture.md
 │   └── contributing.md
-├── skills/
-│   ├── changelog/
-│   │   ├── SKILL.md         Required — instructions the agent follows
-│   │   └── evals/
-│   │       └── evals.json   Optional — test cases for the skill
-│   ├── document-project/    (same layout)
-│   ├── find-breaking-rest-api/
-│   ├── find-dead-code/
-│   └── improve-logging/
 ├── CHANGELOG.md
 └── README.md
 ```

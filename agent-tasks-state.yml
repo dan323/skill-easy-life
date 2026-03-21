@@ -1,0 +1,7 @@
+# agent-tasks-state.yml — managed automatically, do not edit by hand
+completed:
+  - repo: "dan323/fintracker"
+    task: "Update dependencies"
+    branch: "task/update-dependencies-857899"
+    pr_url: "https://github.com/dan323/fintracker/pull/11"
+    date: "2026-03-21"

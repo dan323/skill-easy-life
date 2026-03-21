@@ -1,29 +1,27 @@
 # agent-skills
 
-A collection of reusable skill modules for [Claude Code](https://claude.ai/code) and GitHub Copilot. Each skill is a Markdown file that gives an AI agent detailed, phase-by-phase instructions for performing a specialized development task — generating changelogs, auditing logging, finding dead code, and more.
+A Claude Code plugin marketplace with reusable skill plugins for [Claude Code](https://claude.ai/code) and GitHub Copilot. Each skill gives an AI agent detailed, phase-by-phase instructions for performing a specialized development task — generating changelogs, auditing logging, finding dead code, and more.
 
 ## Quick Start
 
-```bash
-# Unix / macOS
-./scripts/install.sh
+### Claude Code (recommended)
 
-# Windows (PowerShell)
-./scripts/install.ps1
+```
+/plugin marketplace add dan323/agent-skills
+/plugin install changelog@agent-skills
 ```
 
-Skills are copied to `~/.claude/skills/` and `~/.copilot/skills/` and become available immediately in your next Claude Code session.
+## Plugins
 
-## Skills
-
-| Skill                                                  | What it does                                                  |
-|--------------------------------------------------------|---------------------------------------------------------------|
-| [`changelog`](skills/changelog/SKILL.md)               | Generate or update `CHANGELOG.md` from git history            |
-| [`document-project`](skills/document-project/SKILL.md) | Create a root `README.md` and `/docs` pages for a project     |
-| [`find-dead-code`](skills/find-dead-code/SKILL.md)     | Find unused functions, classes, imports, and variables        |
-| [`improve-logging`](skills/improve-logging/SKILL.md)   | Audit log quality and produce prioritised fix recommendations |
-| [`find-breaking-rest-api`](skills/find-breaking-rest-api/SKILL.md) | Detect breaking changes in REST APIs by comparing git history         |
-| [`brainstorm`](skills/brainstorm/SKILL.md)             | Read the project and suggest the 5 most valuable features or improvements to build next |
+| Plugin                                                                      | What it does                                                          |
+|-----------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| [`changelog`](plugins/changelog/skills/changelog/SKILL.md)                 | Generate or update `CHANGELOG.md` from git history                   |
+| [`document-project`](plugins/document-project/skills/document-project/SKILL.md) | Create a root `README.md` and `/docs` pages for a project        |
+| [`find-dead-code`](plugins/find-dead-code/skills/find-dead-code/SKILL.md)  | Find unused functions, classes, imports, and variables                |
+| [`improve-logging`](plugins/improve-logging/skills/improve-logging/SKILL.md) | Audit log quality and produce prioritised fix recommendations       |
+| [`find-breaking-rest-api`](plugins/find-breaking-rest-api/skills/find-breaking-rest-api/SKILL.md) | Detect breaking changes in REST APIs by comparing git history |
+| [`brainstorm`](plugins/brainstorm/skills/brainstorm/SKILL.md)              | Suggest the 5 most valuable features or improvements to build next    |
+| [`task-agent`](plugins/task-agent/skills/task-agent/SKILL.md)              | Read tasks from `agent-tasks.yml`, implement each via an agent, open PRs |
 
 ## Documentation
 

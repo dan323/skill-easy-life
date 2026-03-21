@@ -4,32 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repository Is
 
-A collection of reusable skill modules for Claude Code and GitHub Copilot. Each skill is a Markdown file (`SKILL.md`) that instructs an AI agent how to perform a specialized multi-phase workflow (e.g., generating changelogs, finding dead code, writing documentation).
+A Claude Code plugin marketplace containing reusable skill plugins for Claude Code and GitHub Copilot. Each plugin wraps a Markdown skill (`SKILL.md`) that instructs an AI agent how to perform a specialized multi-phase workflow (e.g., generating changelogs, finding dead code, writing documentation).
 
 ## Installation
 
-```bash
-# Unix/macOS
-./install.sh
+### Claude Code (recommended)
 
-# Windows (PowerShell)
-./install.ps1
+```
+/plugin marketplace add dan323/agent-skills
 ```
 
-These scripts copy each `skills/<name>/` directory into `~/.claude/skills/` and `~/.copilot/skills/`.
+Then install individual plugins:
 
-## Skill Structure
+```
+/plugin install changelog@agent-skills
+/plugin install brainstorm@agent-skills
+```
 
-Each skill lives in `skills/<skill-name>/SKILL.md` with optional `evals/evals.json` for test cases.
+## Repository Structure
 
-A `SKILL.md` file contains:
-- **YAML frontmatter** — `name`, `description`, `tools` (list of Claude tools the skill may invoke)
-- **Numbered phases** — Each phase has a title, step-by-step instructions, bash commands to run, and outcome decisions
-- **Output section** — Specifies what the skill produces and how to summarize results to the user
+```
+.claude-plugin/
+  marketplace.json        ← Marketplace catalog (lists all plugins)
+plugins/
+  <skill-name>/
+    .claude-plugin/
+      plugin.json         ← Plugin manifest (name, version, description, keywords)
+    skills/
+      <skill-name>/
+        SKILL.md          ← The skill itself
+    evals/
+      evals.json          ← Test cases for the skill-creator tooling
+```
 
-## Architectural Conventions
+## Skill/Plugin Design Principles
 
-**Skill design principles:**
 - Skills must be **idempotent** — re-running should not corrupt existing files. Use `Edit` over `Write` when updating existing content.
 - Skills use **graceful degradation** — if an optional CLI tool (e.g., `vulture`, `tsc`) is unavailable, fall back to grep-based analysis.
 - Skills are **framework-aware** — e.g., `find-dead-code` knows not to flag Spring `@Bean` methods or DI-injected classes as dead.
@@ -41,19 +50,26 @@ A `SKILL.md` file contains:
 - `setup` contains shell commands to create a test environment
 - `assertions` are plain-language statements verified by the skill creator tooling
 
-## Current Skills
+## Current Plugins
 
-| Skill                    | File                                     | Purpose                                                                   |
-|--------------------------|------------------------------------------|---------------------------------------------------------------------------|
-| `changelog`              | `skills/changelog/SKILL.md`              | Generate/update CHANGELOG.md from git history                             |
-| `document-project`       | `skills/document-project/SKILL.md`       | Create README + `/docs` structure                                         |
-| `find-dead-code`         | `skills/find-dead-code/SKILL.md`         | Find unused functions, classes, imports across languages                  |
-| `find-breaking-rest-api` | `skills/find-breaking-rest-api/SKILL.md` | Find breaking REST API changes — multi-file routers, shared schemas, auth |
-| `improve-logging`        | `skills/improve-logging/SKILL.md`        | Audit logging quality and produce prioritised fix recommendations         |
-| `brainstorm`             | `skills/brainstorm/SKILL.md`             | Read the project and suggest the 5 most valuable next features or improvements |
+| Plugin                   | Purpose                                                                        |
+|--------------------------|--------------------------------------------------------------------------------|
+| `brainstorm`             | Read the project and suggest the 5 most valuable next features or improvements |
+| `changelog`              | Generate/update CHANGELOG.md from git history                                  |
+| `document-project`       | Create README + `/docs` structure                                              |
+| `find-breaking-rest-api` | Find breaking REST API changes — multi-file routers, shared schemas, auth      |
+| `find-dead-code`         | Find unused functions, classes, imports across languages                       |
+| `improve-logging`        | Audit logging quality and produce prioritised fix recommendations              |
+| `task-agent`       | Read tasks from agent-tasks.yml, spawn agents per task, open PRs               |
 
-## Adding a New Skill
+## Adding a New Plugin
 
-1. Create `skills/<skill-name>/SKILL.md` following the phase-based format of existing skills.
-2. Add `evals/evals.json` with at least 3–5 test scenarios covering main cases.
-3. The skill will be picked up automatically by `install.sh`/`install.ps1` on next run.
+1. Create `plugins/<skill-name>/` with the structure above.
+2. Write `plugins/<skill-name>/skills/<skill-name>/SKILL.md` following the phase-based format of existing skills.
+3. Add `plugins/<skill-name>/.claude-plugin/plugin.json` with name, version, description, and keywords.
+4. Add `plugins/<skill-name>/evals/evals.json` with at least 3–5 test scenarios.
+5. Register it in `.claude-plugin/marketplace.json` under `plugins`.
+
+## Doc rules
+
+Every time you modify anything, fix the documentation and CHANGELOG.md accordingly, if needed.

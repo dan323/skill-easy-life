@@ -10,26 +10,19 @@
 
 ## Install
 
-1. Clone the repository:
+### Claude Code (recommended)
 
-   ```bash
-   git clone https://github.com/your-org/agent-skills.git
-   cd agent-skills
-   ```
+```
+/plugin marketplace add dan323/agent-skills
+```
 
-2. Run the installer for your platform:
+Then install individual plugins:
 
-   ```bash
-   # Unix / macOS
-   ./scripts/install.sh
+```
+/plugin install changelog@agent-skills
+/plugin install brainstorm@agent-skills
+```
 
-   # Windows (PowerShell)
-   ./scripts/install.ps1
-   ```
-
-   The script copies every skill folder from `skills/` into:
-   - `~/.claude/skills/` (Claude Code)
-   - `~/.copilot/skills/` (GitHub Copilot)
 
 3. Verify by starting a new Claude Code session and asking it to use one of the skills:
 
@@ -53,11 +46,8 @@ Each skill produces output in your current working directory (report files, upda
 
 ## Updating
 
-To pick up new or updated skills, pull the latest changes and re-run the installer:
-
-```bash
-git pull
-./scripts/install.sh   # or install.ps1
+```
+/plugin update <name>@agent-skills
 ```
 
 ---
