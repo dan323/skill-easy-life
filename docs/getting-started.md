@@ -23,13 +23,6 @@ Then install individual plugins:
 /plugin install brainstorm@skill-easy-life
 ```
 
-
-3. Verify by starting a new Claude Code session and asking it to use one of the skills:
-
-   ```
-   Generate a changelog for this project
-   ```
-
 ## First Use
 
 Skills trigger automatically when Claude recognises a matching request — you do not need to name the skill explicitly. For example:

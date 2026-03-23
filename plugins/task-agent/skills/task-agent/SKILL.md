@@ -144,7 +144,22 @@ git -C "$LOCAL_PATH" checkout DEFAULT_BRANCH
 git -C "$LOCAL_PATH" checkout -b "$BRANCH"
 ```
 
-### 3.3 Spawn a new subagent to implement the task
+### 3.3 Read relevant references
+
+Before spawning the subagent, read the reference files from the skill's `/references`
+directory that are relevant to the task's technology stack. Include their full content
+verbatim in the subagent prompt below.
+
+For example:
+- Task involves JavaScript/npm → read `/references/npm.md`
+- Task involves Java/Maven → read `/references/maven.md` (if it exists)
+
+Read only files that are relevant. Do not guess — check what files exist first with Glob.
+
+### 3.4 Spawn a new subagent to implement the task
+
+Include the content of the relevant reference files (from 3.3) in the prompt under a
+"## Reference guides" section.
 
 ```
 You are working on a git repository located at: LOCAL_PATH
@@ -154,18 +169,24 @@ Current branch: BRANCH_NAME
 Your task:
 TASK_DESCRIPTION
 
+## Reference guides
+
+REFERENCE_FILE_CONTENTS (full content of each relevant file from /references)
+
 Instructions:
 1. Read the codebase to understand its structure and conventions.
-2. Implement the task — be focused, do only what is asked.
-3. Stage your changes: git -C LOCAL_PATH add -A
-4. Commit with a clear message: git -C LOCAL_PATH commit -m "YOUR_MESSAGE"
+2. Output a list of reference filenames you will use from the /references directory, and their purpose.
+3. Implement the task — be focused, do only what is asked.
+   Follow the reference guides above for the correct tooling and commands.
+4. Stage your changes: git -C LOCAL_PATH add -A
+5. Commit with a clear message: git -C LOCAL_PATH commit -m "YOUR_MESSAGE"
    If nothing needed to change (task already done), say so explicitly instead.
-5. Do NOT push — the caller handles that.
+6. Do NOT push — the caller handles that.
 
 Return a short paragraph summarising what you changed and why.
 ```
 
-### 3.4 Push the branch
+### 3.5 Push the branch
 
 ```bash
 git -C "$LOCAL_PATH" push origin "$BRANCH" --force-with-lease
@@ -174,7 +195,7 @@ git -C "$LOCAL_PATH" push origin "$BRANCH" --force-with-lease
 If there are no commits to push, mark the task as "nothing to commit" and skip to Phase 4
 (still update state so we don't retry it tomorrow).
 
-### 3.5 Open the PR
+### 3.6 Open the PR
 
 Call `mcp__github__create_pull_request` with:
 - `owner`: OWNER
@@ -189,7 +210,7 @@ Call `mcp__github__create_pull_request` with:
   AGENT_SUMMARY
 
   ---
-  *Opened by multi-repo-tasks via Claude Code.*
+  *Opened by task-agent via Claude Code.*
   ```
 
 Capture the `html_url` field from the response as the PR URL.
@@ -256,4 +277,4 @@ Next up:  "Fix the typo in README.md" (owner/repo-name)
 
 
 ## Rules
-- In /references there are more context to read. These files relate to programming languages, package manager, etc. Read only those that make sense for the task at hand.
+- Reference files in `/references` must be read **before** spawning the Phase 3 subagent and injected into its prompt. The subagent has no memory of the skill directory — passing content explicitly is the only way it can follow the correct tooling conventions.
